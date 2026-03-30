@@ -14,8 +14,6 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AURORA · Painel de Controle</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-
   :root {
     --bg:       #0a0c10;
     --surface:  #111318;
@@ -31,8 +29,8 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
     --yellow:   #f6e05e;
     --blue:     #63b3ed;
     --radius:   12px;
-    --mono:     'JetBrains Mono', monospace;
-    --sans:     'Syne', sans-serif;
+    --mono:     'Courier New', monospace;
+    --sans:     -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -157,7 +155,6 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
   .topbar {
     position: sticky; top: 0; z-index: 50;
     background: rgba(10,12,16,0.92);
-    backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
     padding: 0 24px;
     height: 60px;
@@ -473,7 +470,6 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,.7);
-    backdrop-filter: blur(4px);
     z-index: 200;
     display: none;
     align-items: center;
@@ -685,6 +681,9 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
     .weather-grid { grid-template-columns: 1fr; }
     .content { padding: 16px; }
     .topbar { padding: 0 16px; }
+  }
+  @media(max-width:1024px){
+    body::before { display: none; }
   }
 
   /* ── ANIMATIONS ───────────────────────────────────────────── */
@@ -973,13 +972,43 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
       <div class="toggle-row">
         <div class="toggle-info">
           <div class="toggle-name">Modo Noturno</div>
-          <div class="toggle-desc">Silencia Telegram entre 22h e 08h</div>
+          <div class="toggle-desc">Silencia Telegram no intervalo configurado abaixo</div>
         </div>
         <label class="toggle">
           <input type="checkbox" id="togNoturno" checked onchange="toggleFunc('noturno', this.checked)">
           <span class="slider"></span>
         </label>
       </div>
+      <div class="form-row" style="margin-top:12px">
+        <div>
+          <div class="form-label">Início do modo noturno</div>
+          <select class="inp" id="cfgNoturnoInicio"></select>
+        </div>
+        <div>
+          <div class="form-label">Fim do modo noturno</div>
+          <select class="inp" id="cfgNoturnoFim"></select>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="salvarHorarioNoturno()">Salvar Horário Noturno</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Cores do LED</div>
+      <div class="form-row">
+        <div><div class="form-label">WiFi conectando</div><input class="inp" type="color" id="ledWifi"><input class="inp" id="ledWifiHex" maxlength="7" placeholder="#0000ff"></div>
+        <div><div class="form-label">Modo idle</div><input class="inp" type="color" id="ledIdle"><input class="inp" id="ledIdleHex" maxlength="7" placeholder="#00aaff"></div>
+      </div>
+      <div class="form-row">
+        <div><div class="form-label">Processando IA</div><input class="inp" type="color" id="ledProcessing"><input class="inp" id="ledProcessingHex" maxlength="7" placeholder="#ff7700"></div>
+        <div><div class="form-label">Sucesso</div><input class="inp" type="color" id="ledSuccess"><input class="inp" id="ledSuccessHex" maxlength="7" placeholder="#00ff00"></div>
+      </div>
+      <div>
+        <div class="form-label">Erro</div>
+        <input class="inp" type="color" id="ledError"><input class="inp" id="ledErrorHex" maxlength="7" placeholder="#ff0000">
+      </div>
+      <button class="btn btn-primary" onclick="salvarCoresLED()">Salvar Cores do LED</button>
     </div>
 
   </div>
@@ -1061,27 +1090,38 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
 <div id="toast"></div>
 
 <script>
-// ═══════════════════════════════════════════════════════════
-//  STATE
-// ═══════════════════════════════════════════════════════════
-let loggedIn = false;
-let currentFile = '';
-let refreshTimer = null;
-let webDisabledFuncs = { led: false, oled: false, alertas: false, noturno: false };
+var loggedIn = false;
+var currentFile = '';
+var refreshTimer = null;
 
-// ═══════════════════════════════════════════════════════════
-//  AUTH
-// ═══════════════════════════════════════════════════════════
+function request(path, opts, cb){
+  opts = opts || {};
+  cb = cb || function(){};
+  var xhr = new XMLHttpRequest();
+  xhr.open(opts.method || 'GET', path, true);
+  xhr.setRequestHeader('Accept', 'application/json');
+  if(opts.headers){
+    for(var k in opts.headers){ if(opts.headers.hasOwnProperty(k)) xhr.setRequestHeader(k, opts.headers[k]); }
+  }
+  xhr.onreadystatechange = function(){
+    if(xhr.readyState !== 4) return;
+    if(xhr.status === 401){ doLogout(); cb(null); return; }
+    if(xhr.status < 200 || xhr.status >= 300){ cb(null); return; }
+    try { cb(JSON.parse(xhr.responseText)); }
+    catch(e){ cb(null); }
+  };
+  xhr.onerror = function(){ cb(null); };
+  xhr.send(opts.body || null);
+}
+
 function doLogin(){
-  const pin = document.getElementById('loginPin').value;
-  fetch('/api/login', {
+  var pin = document.getElementById('loginPin').value;
+  request('/api/login', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({pin})
-  })
-  .then(r=>r.json())
-  .then(d=>{
-    if(d.ok){
+    body: JSON.stringify({pin: pin})
+  }, function(d){
+    if(d && d.ok){
       loggedIn = true;
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('app').style.display = 'block';
@@ -1090,376 +1130,365 @@ function doLogin(){
       document.getElementById('loginErr').textContent = 'Senha incorreta.';
       document.getElementById('loginPin').value = '';
     }
-  })
-  .catch(()=>{ document.getElementById('loginErr').textContent = 'Erro de conexão.'; });
+  });
 }
 
 function doLogout(){
-  fetch('/api/logout', {method:'POST'})
-    .finally(()=>{
-      loggedIn = false;
-      clearInterval(refreshTimer);
-      document.getElementById('app').style.display = 'none';
-      document.getElementById('loginScreen').style.display = 'flex';
-      document.getElementById('loginPin').value = '';
-      document.getElementById('loginErr').textContent = '';
-    });
+  request('/api/logout', {method:'POST'}, function(){});
+  loggedIn = false;
+  clearInterval(refreshTimer);
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginPin').value = '';
+  document.getElementById('loginErr').textContent = '';
 }
 
-// ═══════════════════════════════════════════════════════════
-//  INIT
-// ═══════════════════════════════════════════════════════════
 function startApp(){
+  preencherHoras();
+  prepararCamposCor();
   refreshDash();
   loadClima();
   loadFiles('/aurora');
   loadConfig();
-  refreshTimer = setInterval(()=>{ if(loggedIn) refreshDash(); }, 10000);
-  // Clock
-  setInterval(()=>{
-    const n = new Date();
-    document.getElementById('topTime').textContent =
-      n.getHours().toString().padStart(2,'0') + ':' +
-      n.getMinutes().toString().padStart(2,'0');
+  refreshTimer = setInterval(function(){ if(loggedIn) refreshDash(); }, 12000);
+  setInterval(function(){
+    var n = new Date();
+    document.getElementById('topTime').textContent = pad2(n.getHours()) + ':' + pad2(n.getMinutes());
   }, 1000);
 }
 
-// ═══════════════════════════════════════════════════════════
-//  TABS
-// ═══════════════════════════════════════════════════════════
 function showTab(name){
-  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
-  document.getElementById('tab-'+name).classList.add('active');
-  event.currentTarget.classList.add('active');
-  // lazy load
+  var i;
+  var panels = document.querySelectorAll('.tab-panel');
+  for(i=0;i<panels.length;i++) panels[i].style.display = 'none';
+  var tabs = document.querySelectorAll('.nav-tab');
+  for(i=0;i<tabs.length;i++) tabs[i].className = tabs[i].className.replace(' active', '');
+  var tab = document.getElementById('tab-' + name);
+  if(tab) tab.style.display = 'block';
+  if(window.event && window.event.currentTarget) window.event.currentTarget.className += ' active';
   if(name==='clima') loadClima();
   if(name==='sdcard') loadFiles('/aurora');
   if(name==='config') loadConfig();
 }
 
-// ═══════════════════════════════════════════════════════════
-//  API HELPER
-// ═══════════════════════════════════════════════════════════
-async function api(path, opts={}){
-  try {
-    const r = await fetch(path, opts);
-    if(r.status === 401){ doLogout(); return null; }
-    return await r.json();
-  } catch(e){ return null; }
-}
-
-// ═══════════════════════════════════════════════════════════
-//  DASHBOARD
-// ═══════════════════════════════════════════════════════════
-async function refreshDash(){
-  const el = document.getElementById('refreshIcon');
+function refreshDash(){
+  var el = document.getElementById('refreshIcon');
   el.textContent = '⟳';
-  const d = await api('/api/status');
-  el.textContent = '↻';
-  if(!d) return;
+  request('/api/status', {}, function(d){
+    el.textContent = '↻';
+    if(!d) return;
+    var t = Number(d.chipTemp || 0);
+    var tEl = document.getElementById('statChipTemp');
+    tEl.innerHTML = t.toFixed(1) + '<span class="stat-unit">°C</span>';
+    tEl.className = 'stat-value' + (t > 75 ? ' bad' : t > 55 ? ' warn' : ' ok');
 
-  // Chip temp
-  const t = d.chipTemp;
-  const tEl = document.getElementById('statChipTemp');
-  tEl.innerHTML = t.toFixed(1) + '<span class="stat-unit">°C</span>';
-  tEl.className = 'stat-value' + (t > 75 ? ' bad' : t > 55 ? ' warn' : ' ok');
+    var hp = Number(d.heapPct || 0);
+    var hEl = document.getElementById('statHeap');
+    hEl.innerHTML = hp + '<span class="stat-unit">%</span>';
+    hEl.className = 'stat-value' + (hp < 20 ? ' bad' : hp < 40 ? ' warn' : ' ok');
+    document.getElementById('heapPct').textContent = hp + '%';
+    var hBar = document.getElementById('heapBar');
+    hBar.style.width = hp + '%';
 
-  // Heap
-  const hp = d.heapPct;
-  const hEl = document.getElementById('statHeap');
-  hEl.innerHTML = hp + '<span class="stat-unit">%</span>';
-  hEl.className = 'stat-value' + (hp < 20 ? ' bad' : hp < 40 ? ' warn' : ' ok');
-  document.getElementById('heapPct').textContent = hp + '%';
-  const hBar = document.getElementById('heapBar');
-  hBar.style.width = hp + '%';
-  hBar.className = 'progress-fill' + (hp < 20 ? ' bad' : hp < 40 ? ' warn' : '');
+    var rssi = Number(d.rssi || 0);
+    var wp = Number(d.wifiPct || 0);
+    var wEl = document.getElementById('statWifi');
+    wEl.innerHTML = rssi + '<span class="stat-unit">dBm</span>';
+    wEl.className = 'stat-value' + (wp < 30 ? ' bad' : wp < 60 ? ' warn' : ' ok');
+    document.getElementById('wifiPct').textContent = wp + '%';
+    var wBar = document.getElementById('wifiBar');
+    wBar.style.width = wp + '%';
 
-  // WiFi
-  const rssi = d.rssi;
-  const wp = d.wifiPct;
-  const wEl = document.getElementById('statWifi');
-  wEl.innerHTML = rssi + '<span class="stat-unit">dBm</span>';
-  wEl.className = 'stat-value' + (wp < 30 ? ' bad' : wp < 60 ? ' warn' : ' ok');
-  document.getElementById('wifiPct').textContent = wp + '%';
-  const wBar = document.getElementById('wifiBar');
-  wBar.style.width = wp + '%';
-  wBar.className = 'progress-fill' + (wp < 30 ? ' bad' : wp < 60 ? ' warn' : '');
-
-  // Others
-  document.getElementById('statUptime').textContent = d.uptime || '--';
-  document.getElementById('statQuestions').textContent = d.questions || '0';
-  document.getElementById('statClimaTemp').innerHTML = d.climaTemp.toFixed(1) + '<span class="stat-unit">°C</span>';
-  document.getElementById('infoIP').textContent = d.ip || '--';
-  document.getElementById('infoSSID').textContent = d.ssid || '--';
-  document.getElementById('infoModelo').textContent = d.modelo || '--';
-  document.getElementById('infoCidade').textContent = d.cidade || '--';
-  document.getElementById('infoSD').textContent = d.sdOK ? '✓ OK' : '✗ Falha';
-  document.getElementById('infoOTA').textContent = d.otaAtivo ? '● Ativo' : 'Inativo';
-  document.getElementById('connDot').title = 'IP: ' + (d.ip||'--');
+    document.getElementById('statUptime').textContent = d.uptime || '--';
+    document.getElementById('statQuestions').textContent = d.questions || '0';
+    document.getElementById('statClimaTemp').innerHTML = Number(d.climaTemp || 0).toFixed(1) + '<span class="stat-unit">°C</span>';
+    document.getElementById('infoIP').textContent = d.ip || '--';
+    document.getElementById('infoSSID').textContent = d.ssid || '--';
+    document.getElementById('infoModelo').textContent = d.modelo || '--';
+    document.getElementById('infoCidade').textContent = d.cidade || '--';
+    document.getElementById('infoSD').textContent = d.sdOK ? '✓ OK' : '✗ Falha';
+    document.getElementById('infoOTA').textContent = d.otaAtivo ? '● Ativo' : 'Inativo';
+  });
 }
 
-// ═══════════════════════════════════════════════════════════
-//  CLIMA
-// ═══════════════════════════════════════════════════════════
-async function loadClima(){
-  const d = await api('/api/clima');
-  if(!d) return;
-  document.getElementById('climaCidade').textContent = d.cidade || '--';
-  document.getElementById('cTemp').innerHTML = d.temp.toFixed(1) + '<span class="stat-unit">°C</span>';
-  document.getElementById('cSens').innerHTML = d.sensTermica.toFixed(1) + '<span class="stat-unit">°C</span>';
-  document.getElementById('cHum').innerHTML = d.umidade + '<span class="stat-unit">%</span>';
-  document.getElementById('cPressao').innerHTML = d.pressao + '<span class="stat-unit">hPa</span>';
-  document.getElementById('cVento').innerHTML = d.vento.toFixed(1) + '<span class="stat-unit">km/h</span>';
-  document.getElementById('cDesc').textContent = d.descricao;
-  // Forecast
-  if(d.prev){
-    document.getElementById('ph1').textContent = d.prev.h1;
-    document.getElementById('ph2').textContent = d.prev.h2;
-    document.getElementById('ph3').textContent = d.prev.h3;
-    document.getElementById('pt1').textContent = Math.round(d.prev.t1) + '°';
-    document.getElementById('pt2').textContent = Math.round(d.prev.t2) + '°';
-    document.getElementById('pt3').textContent = Math.round(d.prev.t3) + '°';
-    document.getElementById('pr1').textContent = Math.round(d.prev.r1) + '%';
-    document.getElementById('pr2').textContent = Math.round(d.prev.r2) + '%';
-    document.getElementById('pr3').textContent = Math.round(d.prev.r3) + '%';
-  }
-  // Alerta
-  if(d.alertaAtivo){
-    document.getElementById('alertaCard').style.display = 'block';
-    document.getElementById('alertaMsg').textContent = d.alertaMsg;
-  } else {
-    document.getElementById('alertaCard').style.display = 'none';
-  }
+function loadClima(){
+  request('/api/clima', {}, function(d){
+    if(!d) return;
+    document.getElementById('climaCidade').textContent = d.cidade || '--';
+    document.getElementById('cTemp').innerHTML = Number(d.temp || 0).toFixed(1) + '<span class="stat-unit">°C</span>';
+    document.getElementById('cSens').innerHTML = Number(d.sensTermica || 0).toFixed(1) + '<span class="stat-unit">°C</span>';
+    document.getElementById('cHum').innerHTML = Number(d.umidade || 0) + '<span class="stat-unit">%</span>';
+    document.getElementById('cPressao').innerHTML = Number(d.pressao || 0) + '<span class="stat-unit">hPa</span>';
+    document.getElementById('cVento').innerHTML = Number(d.vento || 0).toFixed(1) + '<span class="stat-unit">km/h</span>';
+    document.getElementById('cDesc').textContent = d.descricao || '--';
+    if(d.prev){
+      document.getElementById('ph1').textContent = d.prev.h1 || '+3h';
+      document.getElementById('ph2').textContent = d.prev.h2 || '+6h';
+      document.getElementById('ph3').textContent = d.prev.h3 || '+9h';
+      document.getElementById('pt1').textContent = Math.round(d.prev.t1 || 0) + '°';
+      document.getElementById('pt2').textContent = Math.round(d.prev.t2 || 0) + '°';
+      document.getElementById('pt3').textContent = Math.round(d.prev.t3 || 0) + '°';
+      document.getElementById('pr1').textContent = Math.round(d.prev.r1 || 0) + '%';
+      document.getElementById('pr2').textContent = Math.round(d.prev.r2 || 0) + '%';
+      document.getElementById('pr3').textContent = Math.round(d.prev.r3 || 0) + '%';
+    }
+    document.getElementById('alertaCard').style.display = d.alertaAtivo ? 'block' : 'none';
+    document.getElementById('alertaMsg').textContent = d.alertaMsg || '';
+  });
 }
 
-async function atualizarClima(){
+function atualizarClima(){
   toast('Atualizando clima...', 'info');
-  const d = await api('/api/clima/update', {method:'POST'});
-  if(d && d.ok){ toast('Clima atualizado!', 'success'); loadClima(); }
-  else toast('Erro ao atualizar.', 'error');
+  request('/api/clima/update', {method:'POST'}, function(d){
+    if(d && d.ok){ toast('Clima atualizado!', 'success'); loadClima(); }
+    else toast('Erro ao atualizar.', 'error');
+  });
 }
 
-// ═══════════════════════════════════════════════════════════
-//  SD CARD FILE EXPLORER
-// ═══════════════════════════════════════════════════════════
-async function loadFiles(path){
-  const tree = document.getElementById('fileTree');
+function loadFiles(path){
+  var tree = document.getElementById('fileTree');
   tree.innerHTML = '<div style="color:var(--muted);font-family:var(--mono);font-size:13px;padding:12px">Carregando...</div>';
-  const d = await api('/api/sd/list?path=' + encodeURIComponent(path));
-  if(!d){ tree.innerHTML = '<div style="color:var(--red);padding:12px;font-family:var(--mono);font-size:13px">Erro ao ler SD</div>'; return; }
+  request('/api/sd/list?path=' + encodeURIComponent(path), {}, function(d){
+    if(!d){ tree.innerHTML = '<div style="color:var(--red);padding:12px">Erro ao ler SD</div>'; return; }
+    var html = '';
+    if(path !== '/'){
+      var parent = path.substring(0, path.lastIndexOf('/')) || '/';
+      html += '<div class="file-dir" data-path="' + escHtml(parent) + '">← voltar</div>';
+    }
+    var i, f;
+    if(d.dirs){
+      for(i=0; i<d.dirs.length; i++){
+        html += '<div class="file-dir" data-path="' + escHtml(d.dirs[i].path) + '">📁 ' + escHtml(d.dirs[i].name) + '</div>';
+      }
+    }
+    if(d.files){
+      for(i=0; i<d.files.length; i++){
+        f = d.files[i];
+        html += '<div class="file-entry" data-file="' + escHtml(f.path) + '">' +
+          '<span class="file-name">📄 ' + escHtml(f.name) + '</span>' +
+          '<span class="file-size">' + formatBytes(f.size) + '</span>' +
+          '<div class="file-actions"><button class="file-btn" data-action="edit">Editar</button><button class="file-btn del" data-action="del">Del</button></div></div>';
+      }
+    }
+    tree.innerHTML = html || '<div style="color:var(--muted);padding:12px">Pasta vazia.</div>';
 
-  let html = '';
-  if(path !== '/'){
-    const parent = path.substring(0, path.lastIndexOf('/')) || '/';
-    html += `<div class="file-dir" onclick="loadFiles('${parent}')">← voltar</div>`;
-  }
+    var dirs = tree.querySelectorAll('.file-dir[data-path]');
+    for(i=0; i<dirs.length; i++) dirs[i].onclick = function(){ loadFiles(this.getAttribute('data-path')); };
 
-  if(d.dirs) d.dirs.forEach(dir=>{
-    html += `<div class="file-dir" onclick="loadFiles('${dir.path}')">📁 ${dir.name}</div>`;
+    var files = tree.querySelectorAll('.file-entry[data-file]');
+    for(i=0; i<files.length; i++){
+      files[i].onclick = function(ev){
+        var e = ev || window.event;
+        var target = e.target || e.srcElement;
+        var pathFile = this.getAttribute('data-file');
+        if(target && target.getAttribute('data-action') === 'edit'){
+          if(e.stopPropagation) e.stopPropagation();
+          editarArquivo(pathFile);
+        } else if(target && target.getAttribute('data-action') === 'del'){
+          if(e.stopPropagation) e.stopPropagation();
+          confirmar('Deletar arquivo?', function(){ deletarArquivo(pathFile); });
+        }
+      };
+    }
   });
-
-  if(d.files) d.files.forEach(f=>{
-    html += `<div class="file-entry">
-      <span class="file-name">📄 ${f.name}</span>
-      <span class="file-size">${formatBytes(f.size)}</span>
-      <div class="file-actions">
-        <button class="file-btn" onclick="editarArquivo('${f.path}', '${f.name}')">Editar</button>
-        <button class="file-btn del" onclick="confirmar('Deletar ${f.name}?', ()=>deletarArquivo('${f.path}'))">Del</button>
-      </div>
-    </div>`;
-  });
-
-  if(!html) html = '<div style="color:var(--muted);padding:12px;font-family:var(--mono);font-size:13px">Pasta vazia.</div>';
-  tree.innerHTML = html;
 }
 
-async function editarArquivo(path, name){
+function editarArquivo(path){
   document.getElementById('editorTitle').textContent = path;
   document.getElementById('editorArea').value = 'Carregando...';
   currentFile = path;
-  document.getElementById('editorModal').classList.add('open');
-  const d = await api('/api/sd/read?path=' + encodeURIComponent(path));
-  if(d) document.getElementById('editorArea').value = d.content || '';
-  else document.getElementById('editorArea').value = '(erro ao ler arquivo)';
-}
-
-async function salvarArquivoEditor(){
-  const content = document.getElementById('editorArea').value;
-  const d = await api('/api/sd/write', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({path: currentFile, content})
-  });
-  if(d && d.ok){ toast('Arquivo salvo!', 'success'); closeEditor(); }
-  else toast('Erro ao salvar.', 'error');
-}
-
-async function deletarArquivoAtual(){
-  confirmar('Deletar este arquivo permanentemente?', async ()=>{
-    closeEditor();
-    await deletarArquivo(currentFile);
+  document.getElementById('editorModal').className = 'modal-overlay open';
+  request('/api/sd/read?path=' + encodeURIComponent(path), {}, function(d){
+    document.getElementById('editorArea').value = d ? (d.content || '') : '(erro ao ler arquivo)';
   });
 }
 
-async function deletarArquivo(path){
-  const d = await api('/api/sd/delete', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({path})
+function salvarArquivoEditor(){
+  var content = document.getElementById('editorArea').value;
+  request('/api/sd/write', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path: currentFile, content: content})}, function(d){
+    if(d && d.ok){ toast('Arquivo salvo!', 'success'); closeEditor(); }
+    else toast('Erro ao salvar.', 'error');
   });
-  if(d && d.ok){ toast('Arquivo deletado.', 'success'); loadFiles(path.substring(0, path.lastIndexOf('/'))||'/'); }
-  else toast('Erro ao deletar.', 'error');
 }
 
-async function criarArquivo(){
-  const path = document.getElementById('newFilePath').value.trim();
-  const content = document.getElementById('newFileContent').value;
+function deletarArquivoAtual(){ confirmar('Deletar este arquivo permanentemente?', function(){ closeEditor(); deletarArquivo(currentFile); }); }
+
+function deletarArquivo(path){
+  request('/api/sd/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path:path})}, function(d){
+    if(d && d.ok){ toast('Arquivo deletado.', 'success'); loadFiles(path.substring(0, path.lastIndexOf('/'))||'/'); }
+    else toast('Erro ao deletar.', 'error');
+  });
+}
+
+function criarArquivo(){
+  var path = document.getElementById('newFilePath').value.replace(/^\s+|\s+$/g, '');
+  var content = document.getElementById('newFileContent').value;
   if(!path){ toast('Informe o caminho do arquivo.', 'error'); return; }
-  const d = await api('/api/sd/write', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({path, content})
+  request('/api/sd/write', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path:path, content:content})}, function(d){
+    if(d && d.ok){
+      toast('Arquivo criado!', 'success');
+      document.getElementById('newFilePath').value = '';
+      document.getElementById('newFileContent').value = '';
+      loadFiles(path.substring(0, path.lastIndexOf('/')) || '/');
+    } else toast('Erro ao criar arquivo.', 'error');
   });
-  if(d && d.ok){
-    toast('Arquivo criado!', 'success');
-    document.getElementById('newFilePath').value = '';
-    document.getElementById('newFileContent').value = '';
-    const dir = path.substring(0, path.lastIndexOf('/')) || '/';
-    loadFiles(dir);
-  } else toast('Erro ao criar arquivo.', 'error');
 }
 
-function closeEditor(){ document.getElementById('editorModal').classList.remove('open'); }
+function closeEditor(){ document.getElementById('editorModal').className = 'modal-overlay'; }
 
-// ═══════════════════════════════════════════════════════════
-//  CONFIG
-// ═══════════════════════════════════════════════════════════
-async function loadConfig(){
-  const d = await api('/api/config');
-  if(!d) return;
-  document.getElementById('cfgModelo').value = d.modelo || 'gemini-2.5-flash';
-  document.getElementById('cfgCidade').value = d.cidade || 'Muriae,BR';
-  document.getElementById('cfgPersonalidade').value = d.personalidade || '';
-  // toggles
-  document.getElementById('togLED').checked    = !d.ledDesabilitado;
-  document.getElementById('togOLED').checked   = !d.oledDesabilitado;
-  document.getElementById('togAlertas').checked = !d.alertasDesabilitados;
-  document.getElementById('togNoturno').checked = !d.noturnoDesabilitado;
-}
+function loadConfig(){
+  request('/api/config', {}, function(d){
+    if(!d) return;
+    document.getElementById('cfgModelo').value = d.modelo || 'gemini-2.5-flash';
+    document.getElementById('cfgCidade').value = d.cidade || 'Muriae,BR';
+    document.getElementById('cfgPersonalidade').value = d.personalidade || '';
+    document.getElementById('togLED').checked = !d.ledDesabilitado;
+    document.getElementById('togOLED').checked = !d.oledDesabilitado;
+    document.getElementById('togAlertas').checked = !d.alertasDesabilitados;
+    document.getElementById('togNoturno').checked = !d.noturnoDesabilitado;
+    document.getElementById('cfgNoturnoInicio').value = String(d.noturnoInicio != null ? d.noturnoInicio : 22);
+    document.getElementById('cfgNoturnoFim').value = String(d.noturnoFim != null ? d.noturnoFim : 8);
 
-async function salvarConfig(){
-  const d = await api('/api/config', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({
-      modelo: document.getElementById('cfgModelo').value,
-      cidade: document.getElementById('cfgCidade').value
-    })
+    preencherCor('ledWifi', 'ledWifiHex', d.ledColors && d.ledColors.wifi, '#000050');
+    preencherCor('ledIdle', 'ledIdleHex', d.ledColors && d.ledColors.idle, '#0050ff');
+    preencherCor('ledProcessing', 'ledProcessingHex', d.ledColors && d.ledColors.processing, '#ff7800');
+    preencherCor('ledSuccess', 'ledSuccessHex', d.ledColors && d.ledColors.success, '#00b400');
+    preencherCor('ledError', 'ledErrorHex', d.ledColors && d.ledColors.error, '#b40000');
   });
-  if(d && d.ok) toast('Configurações salvas!', 'success');
-  else toast('Erro ao salvar.', 'error');
 }
 
-async function salvarPersonalidade(){
-  const texto = document.getElementById('cfgPersonalidade').value;
-  const d = await api('/api/personalidade', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({texto})
+function salvarConfig(callback){
+  var payload = {
+    modelo: document.getElementById('cfgModelo').value,
+    cidade: document.getElementById('cfgCidade').value,
+    noturnoInicio: parseInt(document.getElementById('cfgNoturnoInicio').value, 10),
+    noturnoFim: parseInt(document.getElementById('cfgNoturnoFim').value, 10),
+    ledColors: {
+      wifi: hexToRgb(corAtual('ledWifi', 'ledWifiHex')),
+      idle: hexToRgb(corAtual('ledIdle', 'ledIdleHex')),
+      processing: hexToRgb(corAtual('ledProcessing', 'ledProcessingHex')),
+      success: hexToRgb(corAtual('ledSuccess', 'ledSuccessHex')),
+      error: hexToRgb(corAtual('ledError', 'ledErrorHex'))
+    }
+  };
+  request('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)}, function(d){
+    if(callback) callback(d && d.ok);
+    if(!callback){ if(d && d.ok) toast('Configurações salvas!', 'success'); else toast('Erro ao salvar.', 'error'); }
   });
-  if(d && d.ok) toast('Personalidade salva!', 'success');
-  else toast('Erro ao salvar.', 'error');
 }
 
-async function toggleFunc(name, enabled){
-  await api('/api/toggle', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({name, enabled})
+function salvarHorarioNoturno(){
+  salvarConfig(function(ok){ toast(ok ? 'Horário noturno salvo!' : 'Erro ao salvar horário.', ok ? 'success' : 'error'); });
+}
+
+function salvarCoresLED(){
+  salvarConfig(function(ok){ toast(ok ? 'Cores do LED salvas!' : 'Erro ao salvar cores.', ok ? 'success' : 'error'); });
+}
+
+function salvarPersonalidade(){
+  var texto = document.getElementById('cfgPersonalidade').value;
+  request('/api/personalidade', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({texto:texto})}, function(d){
+    if(d && d.ok) toast('Personalidade salva!', 'success');
+    else toast('Erro ao salvar.', 'error');
   });
-  toast((enabled ? '✓ ' : '✗ ') + name + ' ' + (enabled ? 'ativado' : 'desativado'), 'info');
 }
 
-// ═══════════════════════════════════════════════════════════
-//  CONTROLE
-// ═══════════════════════════════════════════════════════════
-async function cmdReset(){
-  await api('/api/cmd/reset', {method:'POST'});
-  toast('Reiniciando...', 'warn');
+function toggleFunc(name, enabled){
+  request('/api/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name:name, enabled:enabled})}, function(){
+    toast((enabled ? '✓ ' : '✗ ') + name + ' ' + (enabled ? 'ativado' : 'desativado'), 'info');
+  });
 }
 
-async function cmdOTA(){
-  const d = await api('/api/cmd/ota', {method:'POST'});
-  if(d && d.ok) toast('OTA ativado por 5 min. IP: ' + d.ip, 'success');
-  else toast('Erro ao ativar OTA.', 'error');
+function cmdReset(){ request('/api/cmd/reset', {method:'POST'}, function(){}); toast('Reiniciando...', 'warn'); }
+function cmdOTA(){ request('/api/cmd/ota', {method:'POST'}, function(d){ toast(d && d.ok ? 'OTA ativo. IP: ' + d.ip : 'Erro ao ativar OTA.', d && d.ok ? 'success' : 'error'); }); }
+function cmdRelatorio(){ request('/api/cmd/relatorio', {method:'POST'}, function(d){ var box=document.getElementById('relatorioBox'); if(d && d.relatorio){ box.textContent=d.relatorio; box.style.display='block'; toast('Relatório gerado!', 'success'); } else toast('Erro ao gerar.', 'error'); }); }
+function cmdLimparIA(){ request('/api/cmd/limpar-ia', {method:'POST'}, function(d){ toast(d&&d.ok?'Histórico IA apagado.':'Erro.', d&&d.ok?'success':'error'); }); }
+function cmdLimparLogs(){ request('/api/cmd/limpar-logs', {method:'POST'}, function(d){ toast(d&&d.ok?'Logs apagados.':'Erro.', d&&d.ok?'success':'error'); }); }
+function cmdLimparMem(){ request('/api/cmd/limpar-mem', {method:'POST'}, function(d){ toast(d&&d.ok?'Memória apagada.':'Erro.', d&&d.ok?'success':'error'); }); }
+
+function fetchLog(){
+  request('/api/log', {}, function(d){
+    if(!d || !d.lines) return;
+    var lines = [];
+    for(var i=0;i<d.lines.length;i++){
+      var l = d.lines[i] || '';
+      var cl = (l.indexOf('Erro')>=0 || l.indexOf('erro')>=0 || l.indexOf('✗')>=0) ? 'err' :
+               (l.indexOf('OK')>=0 || l.indexOf('✓')>=0 || l.indexOf('ok')>=0) ? 'ok' :
+               (l.indexOf('Warn')>=0 ? 'warn' : '');
+      lines.push('<span class="log-line '+cl+'">'+escHtml(l)+'</span>');
+    }
+    var box = document.getElementById('logBox');
+    box.innerHTML = lines.join('\\n');
+    box.scrollTop = box.scrollHeight;
+  });
 }
 
-async function cmdRelatorio(){
-  toast('Gerando relatório...', 'info');
-  const d = await api('/api/cmd/relatorio', {method:'POST'});
-  if(d && d.relatorio){
-    const box = document.getElementById('relatorioBox');
-    box.textContent = d.relatorio;
-    box.style.display = 'block';
-    toast('Relatório gerado!', 'success');
-  } else toast('Erro ao gerar.', 'error');
-}
-
-async function cmdLimparIA(){
-  const d = await api('/api/cmd/limpar-ia', {method:'POST'});
-  if(d && d.ok) toast('Histórico IA apagado.', 'success');
-  else toast('Erro.', 'error');
-}
-
-async function cmdLimparLogs(){
-  const d = await api('/api/cmd/limpar-logs', {method:'POST'});
-  if(d && d.ok) toast('Logs apagados.', 'success');
-  else toast('Erro.', 'error');
-}
-
-async function cmdLimparMem(){
-  const d = await api('/api/cmd/limpar-mem', {method:'POST'});
-  if(d && d.ok) toast('Memória apagada.', 'success');
-  else toast('Erro.', 'error');
-}
-
-async function fetchLog(){
-  const d = await api('/api/log');
-  if(!d || !d.lines) return;
-  const box = document.getElementById('logBox');
-  box.innerHTML = d.lines.map(l=>{
-    const cl = l.includes('Erro')||l.includes('erro')||l.includes('✗') ? 'err' :
-               l.includes('OK')||l.includes('✓')||l.includes('ok') ? 'ok' :
-               l.includes('Warn') ? 'warn' : '';
-    return `<span class="log-line ${cl}">${escHtml(l)}</span>`;
-  }).join('\n');
-  box.scrollTop = box.scrollHeight;
-}
-
-// ═══════════════════════════════════════════════════════════
-//  HELPERS
-// ═══════════════════════════════════════════════════════════
-function confirmar(msg, cb){
-  if(confirm(msg)) cb();
-}
-
-function toast(msg, type='info'){
-  const wrap = document.getElementById('toast');
-  const el = document.createElement('div');
+function confirmar(msg, cb){ if(confirm(msg)) cb(); }
+function toast(msg, type){
+  type = type || 'info';
+  var wrap = document.getElementById('toast');
+  var el = document.createElement('div');
   el.className = 'toast-item ' + type;
-  el.textContent = msg;
+  el.appendChild(document.createTextNode(msg));
   wrap.appendChild(el);
-  setTimeout(()=>{ el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(), 300); }, 3000);
+  setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 3000);
 }
 
-function formatBytes(b){
-  if(b<1024) return b+'B';
-  if(b<1048576) return (b/1024).toFixed(1)+'KB';
-  return (b/1048576).toFixed(1)+'MB';
+function preencherHoras(){
+  var ini = document.getElementById('cfgNoturnoInicio');
+  var fim = document.getElementById('cfgNoturnoFim');
+  if(ini.options.length) return;
+  for(var h=0; h<24; h++){
+    var txt = pad2(h) + ':00';
+    ini.options.add(new Option(txt, String(h)));
+    fim.options.add(new Option(txt, String(h)));
+  }
 }
 
-function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function prepararCamposCor(){
+  vincularCor('ledWifi', 'ledWifiHex');
+  vincularCor('ledIdle', 'ledIdleHex');
+  vincularCor('ledProcessing', 'ledProcessingHex');
+  vincularCor('ledSuccess', 'ledSuccessHex');
+  vincularCor('ledError', 'ledErrorHex');
+}
+
+function vincularCor(idColor, idHex){
+  var c = document.getElementById(idColor);
+  var h = document.getElementById(idHex);
+  if(c) c.onchange = function(){ h.value = normalizarHex(c.value); };
+  if(h) h.onkeyup = function(){ var v = normalizarHex(h.value); if(v.length === 7 && c) c.value = v; };
+}
+
+function preencherCor(idColor, idHex, rgb, fallback){
+  var hex = rgb ? rgbToHex(rgb) : fallback;
+  document.getElementById(idColor).value = hex;
+  document.getElementById(idHex).value = hex;
+}
+
+function corAtual(idColor, idHex){
+  var hex = normalizarHex(document.getElementById(idHex).value || document.getElementById(idColor).value);
+  document.getElementById(idHex).value = hex;
+  document.getElementById(idColor).value = hex;
+  return hex;
+}
+
+function normalizarHex(hex){
+  var h = String(hex || '').replace(/[^0-9a-fA-F]/g, '');
+  if(h.length < 6) h = (h + '000000').substring(0, 6);
+  if(h.length > 6) h = h.substring(0, 6);
+  return '#' + h.toLowerCase();
+}
+
+function hexToRgb(hex){
+  var h = normalizarHex(hex).replace('#', '');
+  return { r: parseInt(h.substring(0,2), 16), g: parseInt(h.substring(2,4), 16), b: parseInt(h.substring(4,6), 16) };
+}
+function rgbToHex(c){ return '#' + toHex(c.r || 0) + toHex(c.g || 0) + toHex(c.b || 0); }
+function toHex(v){ var s = Number(v).toString(16); return s.length < 2 ? '0' + s : s; }
+function pad2(v){ return v < 10 ? '0' + v : String(v); }
+function formatBytes(b){ if(b<1024) return b+'B'; if(b<1048576) return (b/1024).toFixed(1)+'KB'; return (b/1048576).toFixed(1)+'MB'; }
+function escHtml(s){ s=String(s||''); return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 </script>
 </body>
 </html>

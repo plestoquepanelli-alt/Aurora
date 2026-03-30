@@ -16,6 +16,12 @@ enum SystemState {
 
 extern SystemState currentState;
 
+struct LedColor {
+  uint8_t r;
+  uint8_t g;
+  uint8_t b;
+};
+
 // ================= FUNÇÕES PÚBLICAS =================
 void initLED();
 void setLED(uint8_t r, uint8_t g, uint8_t b);
@@ -25,6 +31,8 @@ void ledPiscandoWiFi();
 void piscarCor(uint8_t r, uint8_t g, uint8_t b);
 void updateLED();
 void esperarComLED(unsigned long tempo);
+bool definirCorLED(const String& nome, uint8_t r, uint8_t g, uint8_t b);
+LedColor obterCorLED(const String& nome);
 
 // ================= VARIÁVEIS =================
 extern bool ledHabilitado;
