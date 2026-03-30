@@ -1,0 +1,1468 @@
+#ifndef WEB_PANEL_H
+#define WEB_PANEL_H
+
+// ════════════════════════════════════════════════════════════
+//  AURORA WEB PANEL — Interface HTML embutida (PROGMEM)
+//  Servida pelo WebServer em WebServer.cpp
+// ════════════════════════════════════════════════════════════
+
+const char AURORA_HTML[] PROGMEM = R"rawhtml(
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AURORA · Painel de Controle</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg:       #0a0c10;
+    --surface:  #111318;
+    --border:   #1e2230;
+    --border2:  #2a2f42;
+    --accent:   #4fd1c5;
+    --accent2:  #f6ad55;
+    --accent3:  #fc8181;
+    --text:     #e2e8f0;
+    --muted:    #718096;
+    --green:    #68d391;
+    --red:      #fc8181;
+    --yellow:   #f6e05e;
+    --blue:     #63b3ed;
+    --radius:   12px;
+    --mono:     'JetBrains Mono', monospace;
+    --sans:     'Syne', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── GRID BACKGROUND ─────────────────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.4;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── LOGIN SCREEN ────────────────────────────────────────── */
+  #loginScreen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    background: var(--bg);
+  }
+
+  .login-card {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 20px;
+    padding: 48px 40px;
+    width: 360px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .login-card::before {
+    content: '';
+    position: absolute;
+    top: -60px; left: 50%; transform: translateX(-50%);
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(79,209,197,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .login-logo {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 6px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .login-title {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    margin-bottom: 32px;
+  }
+
+  .login-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 18px;
+    text-align: center;
+    letter-spacing: 8px;
+    outline: none;
+    transition: border-color .2s;
+    margin-bottom: 16px;
+  }
+
+  .login-input:focus { border-color: var(--accent); }
+
+  .login-btn {
+    width: 100%;
+    background: var(--accent);
+    color: #0a0c10;
+    border: none;
+    border-radius: var(--radius);
+    padding: 14px;
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity .2s, transform .1s;
+  }
+  .login-btn:hover { opacity: .85; }
+  .login-btn:active { transform: scale(.98); }
+
+  .login-error {
+    color: var(--red);
+    font-size: 13px;
+    margin-top: 12px;
+    min-height: 18px;
+    font-family: var(--mono);
+  }
+
+  /* ── MAIN LAYOUT ─────────────────────────────────────────── */
+  #app { display: none; position: relative; z-index: 1; }
+
+  /* ── TOPBAR ───────────────────────────────────────────────── */
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(10,12,16,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .topbar-brand {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 5px;
+    color: var(--accent);
+    text-transform: uppercase;
+    flex: 1;
+  }
+
+  .topbar-brand span { color: var(--muted); font-weight: 400; }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .4; }
+  }
+
+  .topbar-time {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .logout-btn {
+    background: none;
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    padding: 6px 14px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all .2s;
+  }
+  .logout-btn:hover { border-color: var(--red); color: var(--red); }
+
+  /* ── NAV TABS ─────────────────────────────────────────────── */
+  .nav {
+    display: flex;
+    gap: 2px;
+    padding: 12px 24px 0;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+
+  .nav-tab {
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .5px;
+    color: var(--muted);
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-bottom: 2px solid transparent;
+    transition: all .2s;
+    white-space: nowrap;
+    font-family: var(--sans);
+    text-transform: uppercase;
+  }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── CONTENT ──────────────────────────────────────────────── */
+  .content {
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── CARDS ────────────────────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .card-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── STAT GRID ────────────────────────────────────────────── */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .stat {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat::before {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    opacity: .4;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .stat-value.ok  { color: var(--green); }
+  .stat-value.warn { color: var(--yellow); }
+  .stat-value.bad  { color: var(--red); }
+  .stat-unit { font-size: 13px; color: var(--muted); margin-left: 4px; }
+
+  /* ── PROGRESS BAR ─────────────────────────────────────────── */
+  .progress-wrap { margin: 8px 0; }
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-family: var(--mono);
+  }
+  .progress-bar {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width .4s ease;
+    background: var(--accent);
+  }
+  .progress-fill.warn { background: var(--yellow); }
+  .progress-fill.bad  { background: var(--red); }
+
+  /* ── INPUT / TEXTAREA ─────────────────────────────────────── */
+  .inp {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    outline: none;
+    transition: border-color .2s;
+    margin-bottom: 12px;
+  }
+  .inp:focus { border-color: var(--accent); }
+
+  textarea.inp {
+    resize: vertical;
+    min-height: 120px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  /* ── BUTTONS ──────────────────────────────────────────────── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: none;
+    transition: all .2s;
+  }
+  .btn-primary { background: var(--accent); color: #0a0c10; }
+  .btn-primary:hover { opacity: .85; }
+  .btn-secondary { background: var(--border2); color: var(--text); }
+  .btn-secondary:hover { background: var(--border); }
+  .btn-danger { background: rgba(252,129,129,.15); color: var(--red); border: 1px solid rgba(252,129,129,.3); }
+  .btn-danger:hover { background: rgba(252,129,129,.25); }
+  .btn-warn { background: rgba(246,173,85,.15); color: var(--accent2); border: 1px solid rgba(246,173,85,.3); }
+  .btn-warn:hover { background: rgba(246,173,85,.25); }
+  .btn-sm { padding: 6px 14px; font-size: 11px; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+  /* ── FORM ROW ─────────────────────────────────────────────── */
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media(max-width:600px){ .form-row { grid-template-columns: 1fr; } }
+
+  .form-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  /* ── FILE EXPLORER ────────────────────────────────────────── */
+  .file-tree { font-family: var(--mono); font-size: 13px; }
+
+  .file-dir {
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    border-radius: 6px;
+    color: var(--accent);
+    font-weight: 500;
+    transition: background .15s;
+  }
+  .file-dir:hover { background: var(--border); }
+
+  .file-entry {
+    padding: 7px 12px 7px 36px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    border-radius: 6px;
+    color: var(--text);
+    transition: background .15s;
+    justify-content: space-between;
+  }
+  .file-entry:hover { background: var(--border); }
+
+  .file-name { flex: 1; }
+  .file-size { color: var(--muted); font-size: 11px; }
+
+  .file-actions { display: flex; gap: 6px; opacity: 0; transition: opacity .15s; }
+  .file-entry:hover .file-actions { opacity: 1; }
+
+  .file-btn {
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    background: none;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: all .15s;
+  }
+  .file-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .file-btn.del:hover { color: var(--red); border-color: var(--red); }
+
+  /* ── EDITOR MODAL ─────────────────────────────────────────── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.7);
+    backdrop-filter: blur(4px);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 700px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .modal-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .modal-title {
+    font-family: var(--mono);
+    font-size: 13px;
+    flex: 1;
+    color: var(--accent);
+  }
+
+  .modal-body { flex: 1; overflow: auto; padding: 16px; }
+
+  .modal textarea {
+    width: 100%;
+    height: 100%;
+    min-height: 300px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 14px;
+    resize: none;
+    outline: none;
+  }
+
+  .modal-footer {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  /* ── TOAST ────────────────────────────────────────────────── */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+  }
+
+  .toast-item {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: 12px 18px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: slideIn .25s ease;
+    pointer-events: all;
+  }
+  .toast-item.success { border-left: 3px solid var(--green); }
+  .toast-item.error   { border-left: 3px solid var(--red); }
+  .toast-item.info    { border-left: 3px solid var(--accent); }
+
+  @keyframes slideIn {
+    from { transform: translateX(60px); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+  }
+
+  /* ── LOG VIEWER ───────────────────────────────────────────── */
+  .log-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    max-height: 300px;
+    overflow-y: auto;
+    color: var(--text);
+  }
+
+  .log-line { display: block; }
+  .log-line.err  { color: var(--red); }
+  .log-line.warn { color: var(--yellow); }
+  .log-line.ok   { color: var(--green); }
+
+  /* ── SECTION DIVIDER ──────────────────────────────────────── */
+  .section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    gap: 12px;
+  }
+  .section-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+
+  /* ── TOGGLE ───────────────────────────────────────────────── */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-info { flex: 1; }
+  .toggle-name { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+  .toggle-desc { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+  .toggle {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border2);
+    border-radius: 24px;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .slider::before {
+    content: '';
+    position: absolute;
+    left: 3px; bottom: 3px;
+    width: 18px; height: 18px;
+    background: white;
+    border-radius: 50%;
+    transition: transform .2s;
+  }
+  .toggle input:checked + .slider { background: var(--accent); }
+  .toggle input:checked + .slider::before { transform: translateX(20px); }
+
+  /* ── MINI CHART ───────────────────────────────────────────── */
+  .chart-wrap {
+    position: relative;
+    height: 80px;
+    margin: 8px 0;
+  }
+
+  canvas.sparkline {
+    width: 100%;
+    height: 80px;
+  }
+
+  /* ── WEATHER GRID ─────────────────────────────────────────── */
+  .weather-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .weather-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    text-align: center;
+  }
+
+  .weather-hour { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-family: var(--mono); }
+  .weather-temp { font-size: 20px; font-weight: 700; font-family: var(--mono); }
+  .weather-rain { font-size: 12px; color: var(--blue); margin-top: 4px; font-family: var(--mono); }
+
+  /* ── SCROLLBAR ────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  /* ── RESPONSIVE ───────────────────────────────────────────── */
+  @media(max-width:480px){
+    .stat-grid { grid-template-columns: 1fr 1fr; }
+    .weather-grid { grid-template-columns: 1fr; }
+    .content { padding: 16px; }
+    .topbar { padding: 0 16px; }
+  }
+
+  /* ── ANIMATIONS ───────────────────────────────────────────── */
+  .fade-in { animation: fadeIn .3s ease; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--border2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════ LOGIN ═══════════════════════════ -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">Sistema</div>
+    <div class="login-title">AURORA</div>
+    <input class="login-input" type="password" id="loginPin" maxlength="6"
+           placeholder="····" autocomplete="off"
+           onkeydown="if(event.key==='Enter') doLogin()">
+    <button class="login-btn" onclick="doLogin()">ENTRAR</button>
+    <div class="login-error" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ════════════════════ APP ════════════════════════════ -->
+<div id="app">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-brand">AURORA <span>· ESP32-S3</span></div>
+    <div class="status-dot" id="connDot" title="Conexão"></div>
+    <div class="topbar-time" id="topTime">--:--</div>
+    <button class="logout-btn" onclick="doLogout()">Sair</button>
+  </div>
+
+  <!-- NAV TABS -->
+  <div class="nav">
+    <button class="nav-tab active" onclick="showTab('dashboard')">Dashboard</button>
+    <button class="nav-tab" onclick="showTab('clima')">Clima</button>
+    <button class="nav-tab" onclick="showTab('sdcard')">SD Card</button>
+    <button class="nav-tab" onclick="showTab('config')">Configurações</button>
+    <button class="nav-tab" onclick="showTab('controle')">Controle</button>
+  </div>
+
+  <!-- ═══════════════ DASHBOARD ══════════════════════════ -->
+  <div class="content">
+  <div id="tab-dashboard" class="tab-panel active fade-in">
+
+    <div class="section-head">
+      <div class="section-title">Visão Geral</div>
+      <button class="btn btn-secondary btn-sm" onclick="refreshDash()">
+        <span id="refreshIcon">↻</span> Atualizar
+      </button>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat">
+        <div class="stat-label">Temperatura Chip</div>
+        <div class="stat-value" id="statChipTemp">--<span class="stat-unit">°C</span></div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Heap Livre</div>
+        <div class="stat-value" id="statHeap">--<span class="stat-unit">%</span></div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">WiFi</div>
+        <div class="stat-value" id="statWifi">--<span class="stat-unit">dBm</span></div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Uptime</div>
+        <div class="stat-value" id="statUptime" style="font-size:16px">--</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Perguntas IA</div>
+        <div class="stat-value" id="statQuestions">--</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Clima Ext.</div>
+        <div class="stat-value" id="statClimaTemp">--<span class="stat-unit">°C</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Recursos do Sistema</div>
+      <div class="progress-wrap">
+        <div class="progress-label">
+          <span>Heap RAM</span>
+          <span id="heapPct">--%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="heapBar" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="progress-wrap" style="margin-top:12px">
+        <div class="progress-label">
+          <span>Sinal WiFi</span>
+          <span id="wifiPct">--%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="wifiBar" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Info do Sistema</div>
+      <div style="font-family:var(--mono);font-size:13px;line-height:2;color:var(--muted)">
+        <div>IP: <span id="infoIP" style="color:var(--accent)">--</span></div>
+        <div>SSID: <span id="infoSSID" style="color:var(--text)">--</span></div>
+        <div>Modelo IA: <span id="infoModelo" style="color:var(--text)">--</span></div>
+        <div>Cidade: <span id="infoCidade" style="color:var(--text)">--</span></div>
+        <div>SD Card: <span id="infoSD" style="color:var(--text)">--</span></div>
+        <div>OTA: <span id="infoOTA" style="color:var(--text)">--</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════ CLIMA ═══════════════════════════════ -->
+  <div id="tab-clima" class="tab-panel fade-in">
+
+    <div class="section-head">
+      <div class="section-title">Clima &amp; Previsão</div>
+      <button class="btn btn-secondary btn-sm" onclick="atualizarClima()">↻ Forçar Update</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Agora em <span id="climaCidade" style="color:var(--accent)">--</span></div>
+      <div class="stat-grid">
+        <div class="stat">
+          <div class="stat-label">Temperatura</div>
+          <div class="stat-value" id="cTemp">--<span class="stat-unit">°C</span></div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Sensação</div>
+          <div class="stat-value" id="cSens">--<span class="stat-unit">°C</span></div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Umidade</div>
+          <div class="stat-value" id="cHum">--<span class="stat-unit">%</span></div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Pressão</div>
+          <div class="stat-value" id="cPressao" style="font-size:18px">--<span class="stat-unit">hPa</span></div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Vento</div>
+          <div class="stat-value" id="cVento" style="font-size:18px">--<span class="stat-unit">km/h</span></div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Condição</div>
+          <div id="cDesc" style="font-size:13px;margin-top:8px;color:var(--text);font-family:var(--mono)">--</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Previsão Próximas Horas</div>
+      <div class="weather-grid">
+        <div class="weather-card">
+          <div class="weather-hour" id="ph1">+3h</div>
+          <div class="weather-temp" id="pt1">--°</div>
+          <div class="weather-rain" id="pr1">--%</div>
+        </div>
+        <div class="weather-card">
+          <div class="weather-hour" id="ph2">+6h</div>
+          <div class="weather-temp" id="pt2">--°</div>
+          <div class="weather-rain" id="pr2">--%</div>
+        </div>
+        <div class="weather-card">
+          <div class="weather-hour" id="ph3">+9h</div>
+          <div class="weather-temp" id="pt3">--°</div>
+          <div class="weather-rain" id="pr3">--%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="alertaCard" style="display:none;border-color:rgba(252,129,129,.4)">
+      <div class="card-title" style="color:var(--red)">⚠ Alerta Ativo</div>
+      <div id="alertaMsg" style="font-family:var(--mono);font-size:13px;line-height:1.6;color:var(--red)"></div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════ SD CARD ═════════════════════════════ -->
+  <div id="tab-sdcard" class="tab-panel fade-in">
+
+    <div class="section-head">
+      <div class="section-title">Gerenciador SD</div>
+      <button class="btn btn-secondary btn-sm" onclick="loadFiles('/')">↻ Recarregar</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Explorador de Arquivos</div>
+      <div id="fileTree" class="file-tree">
+        <div style="color:var(--muted);font-family:var(--mono);font-size:13px;padding:12px">
+          Carregando...
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Criar Novo Arquivo</div>
+      <div class="form-label">Caminho completo</div>
+      <input class="inp" id="newFilePath" placeholder="/aurora/agenda/nota.txt">
+      <div class="form-label">Conteúdo</div>
+      <textarea class="inp" id="newFileContent" placeholder="Conteúdo do arquivo..." style="min-height:80px"></textarea>
+      <button class="btn btn-primary" onclick="criarArquivo()">Criar Arquivo</button>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════ CONFIGURAÇÕES ═══════════════════════ -->
+  <div id="tab-config" class="tab-panel fade-in">
+
+    <div class="section-title" style="margin-bottom:20px">Configurações</div>
+
+    <div class="card">
+      <div class="card-title">Parâmetros Gerais</div>
+      <div class="form-row">
+        <div>
+          <div class="form-label">Modelo Gemini</div>
+          <select class="inp" id="cfgModelo" style="cursor:pointer">
+            <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+            <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+            <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+          </select>
+        </div>
+        <div>
+          <div class="form-label">Cidade (OpenWeather)</div>
+          <input class="inp" id="cfgCidade" placeholder="Muriae,BR">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="salvarConfig()">Salvar Configurações</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Personalidade da Aurora</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;font-family:var(--mono)">
+        Texto que define o comportamento e personalidade da IA
+      </div>
+      <textarea class="inp" id="cfgPersonalidade" placeholder="Carregando..." style="min-height:160px"></textarea>
+      <button class="btn btn-primary" onclick="salvarPersonalidade()">Salvar Personalidade</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Funções do Sistema</div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">LED NeoPixel</div>
+          <div class="toggle-desc">Indicador visual de estado do sistema</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="togLED" checked onchange="toggleFunc('led', this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">OLED Display</div>
+          <div class="toggle-desc">Exibição de dados no display físico</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="togOLED" checked onchange="toggleFunc('oled', this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">Alertas Climáticos</div>
+          <div class="toggle-desc">Notificações Telegram de clima severo</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="togAlertas" checked onchange="toggleFunc('alertas', this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">Modo Noturno</div>
+          <div class="toggle-desc">Silencia Telegram entre 22h e 08h</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="togNoturno" checked onchange="toggleFunc('noturno', this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════ CONTROLE ════════════════════════════ -->
+  <div id="tab-controle" class="tab-panel fade-in">
+
+    <div class="section-title" style="margin-bottom:20px">Painel de Controle</div>
+
+    <div class="card">
+      <div class="card-title">Ações do Sistema</div>
+      <div class="btn-row">
+        <button class="btn btn-warn" onclick="confirmar('Reiniciar ESP32?', cmdReset)">
+          ↺ Reiniciar
+        </button>
+        <button class="btn btn-secondary" onclick="cmdOTA()">
+          📡 Ativar OTA
+        </button>
+        <button class="btn btn-secondary" onclick="cmdRelatorio()">
+          📊 Gerar Relatório
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Limpeza de Dados</div>
+      <div class="btn-row">
+        <button class="btn btn-danger btn-sm" onclick="confirmar('Apagar histórico da IA?', cmdLimparIA)">
+          🗑 Histórico IA
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="confirmar('Apagar todos os logs?', cmdLimparLogs)">
+          🗑 Logs SD
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="confirmar('Apagar memória de perguntas?', cmdLimparMem)">
+          🗑 Memória Perguntas
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Console Serial (últimas linhas)</div>
+      <div class="log-box" id="logBox">
+        <span class="log-line ok">Sistema pronto.</span>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary btn-sm" onclick="fetchLog()">↻ Atualizar</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('logBox').innerHTML=''">Limpar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Relatório Gerado</div>
+      <div id="relatorioBox" class="log-box" style="min-height:60px;white-space:pre-wrap;display:none"></div>
+    </div>
+
+  </div>
+  </div><!-- /content -->
+
+</div><!-- /app -->
+
+<!-- ════════════════ EDITOR MODAL ════════════════════════ -->
+<div class="modal-overlay" id="editorModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="editorTitle">/aurora/config/arquivo.txt</div>
+      <button class="btn btn-secondary btn-sm" onclick="closeEditor()">✕ Fechar</button>
+    </div>
+    <div class="modal-body">
+      <textarea id="editorArea" spellcheck="false"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" onclick="deletarArquivoAtual()">🗑 Deletar</button>
+      <button class="btn btn-primary" onclick="salvarArquivoEditor()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ TOAST ════════════════════════════════ -->
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════
+let loggedIn = false;
+let currentFile = '';
+let refreshTimer = null;
+let webDisabledFuncs = { led: false, oled: false, alertas: false, noturno: false };
+
+// ═══════════════════════════════════════════════════════════
+//  AUTH
+// ═══════════════════════════════════════════════════════════
+function doLogin(){
+  const pin = document.getElementById('loginPin').value;
+  fetch('/api/login', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({pin})
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    if(d.ok){
+      loggedIn = true;
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      startApp();
+    } else {
+      document.getElementById('loginErr').textContent = 'Senha incorreta.';
+      document.getElementById('loginPin').value = '';
+    }
+  })
+  .catch(()=>{ document.getElementById('loginErr').textContent = 'Erro de conexão.'; });
+}
+
+function doLogout(){
+  fetch('/api/logout', {method:'POST'})
+    .finally(()=>{
+      loggedIn = false;
+      clearInterval(refreshTimer);
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('loginScreen').style.display = 'flex';
+      document.getElementById('loginPin').value = '';
+      document.getElementById('loginErr').textContent = '';
+    });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════
+function startApp(){
+  refreshDash();
+  loadClima();
+  loadFiles('/aurora');
+  loadConfig();
+  refreshTimer = setInterval(()=>{ if(loggedIn) refreshDash(); }, 10000);
+  // Clock
+  setInterval(()=>{
+    const n = new Date();
+    document.getElementById('topTime').textContent =
+      n.getHours().toString().padStart(2,'0') + ':' +
+      n.getMinutes().toString().padStart(2,'0');
+  }, 1000);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TABS
+// ═══════════════════════════════════════════════════════════
+function showTab(name){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  // lazy load
+  if(name==='clima') loadClima();
+  if(name==='sdcard') loadFiles('/aurora');
+  if(name==='config') loadConfig();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  API HELPER
+// ═══════════════════════════════════════════════════════════
+async function api(path, opts={}){
+  try {
+    const r = await fetch(path, opts);
+    if(r.status === 401){ doLogout(); return null; }
+    return await r.json();
+  } catch(e){ return null; }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DASHBOARD
+// ═══════════════════════════════════════════════════════════
+async function refreshDash(){
+  const el = document.getElementById('refreshIcon');
+  el.textContent = '⟳';
+  const d = await api('/api/status');
+  el.textContent = '↻';
+  if(!d) return;
+
+  // Chip temp
+  const t = d.chipTemp;
+  const tEl = document.getElementById('statChipTemp');
+  tEl.innerHTML = t.toFixed(1) + '<span class="stat-unit">°C</span>';
+  tEl.className = 'stat-value' + (t > 75 ? ' bad' : t > 55 ? ' warn' : ' ok');
+
+  // Heap
+  const hp = d.heapPct;
+  const hEl = document.getElementById('statHeap');
+  hEl.innerHTML = hp + '<span class="stat-unit">%</span>';
+  hEl.className = 'stat-value' + (hp < 20 ? ' bad' : hp < 40 ? ' warn' : ' ok');
+  document.getElementById('heapPct').textContent = hp + '%';
+  const hBar = document.getElementById('heapBar');
+  hBar.style.width = hp + '%';
+  hBar.className = 'progress-fill' + (hp < 20 ? ' bad' : hp < 40 ? ' warn' : '');
+
+  // WiFi
+  const rssi = d.rssi;
+  const wp = d.wifiPct;
+  const wEl = document.getElementById('statWifi');
+  wEl.innerHTML = rssi + '<span class="stat-unit">dBm</span>';
+  wEl.className = 'stat-value' + (wp < 30 ? ' bad' : wp < 60 ? ' warn' : ' ok');
+  document.getElementById('wifiPct').textContent = wp + '%';
+  const wBar = document.getElementById('wifiBar');
+  wBar.style.width = wp + '%';
+  wBar.className = 'progress-fill' + (wp < 30 ? ' bad' : wp < 60 ? ' warn' : '');
+
+  // Others
+  document.getElementById('statUptime').textContent = d.uptime || '--';
+  document.getElementById('statQuestions').textContent = d.questions || '0';
+  document.getElementById('statClimaTemp').innerHTML = d.climaTemp.toFixed(1) + '<span class="stat-unit">°C</span>';
+  document.getElementById('infoIP').textContent = d.ip || '--';
+  document.getElementById('infoSSID').textContent = d.ssid || '--';
+  document.getElementById('infoModelo').textContent = d.modelo || '--';
+  document.getElementById('infoCidade').textContent = d.cidade || '--';
+  document.getElementById('infoSD').textContent = d.sdOK ? '✓ OK' : '✗ Falha';
+  document.getElementById('infoOTA').textContent = d.otaAtivo ? '● Ativo' : 'Inativo';
+  document.getElementById('connDot').title = 'IP: ' + (d.ip||'--');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CLIMA
+// ═══════════════════════════════════════════════════════════
+async function loadClima(){
+  const d = await api('/api/clima');
+  if(!d) return;
+  document.getElementById('climaCidade').textContent = d.cidade || '--';
+  document.getElementById('cTemp').innerHTML = d.temp.toFixed(1) + '<span class="stat-unit">°C</span>';
+  document.getElementById('cSens').innerHTML = d.sensTermica.toFixed(1) + '<span class="stat-unit">°C</span>';
+  document.getElementById('cHum').innerHTML = d.umidade + '<span class="stat-unit">%</span>';
+  document.getElementById('cPressao').innerHTML = d.pressao + '<span class="stat-unit">hPa</span>';
+  document.getElementById('cVento').innerHTML = d.vento.toFixed(1) + '<span class="stat-unit">km/h</span>';
+  document.getElementById('cDesc').textContent = d.descricao;
+  // Forecast
+  if(d.prev){
+    document.getElementById('ph1').textContent = d.prev.h1;
+    document.getElementById('ph2').textContent = d.prev.h2;
+    document.getElementById('ph3').textContent = d.prev.h3;
+    document.getElementById('pt1').textContent = Math.round(d.prev.t1) + '°';
+    document.getElementById('pt2').textContent = Math.round(d.prev.t2) + '°';
+    document.getElementById('pt3').textContent = Math.round(d.prev.t3) + '°';
+    document.getElementById('pr1').textContent = Math.round(d.prev.r1) + '%';
+    document.getElementById('pr2').textContent = Math.round(d.prev.r2) + '%';
+    document.getElementById('pr3').textContent = Math.round(d.prev.r3) + '%';
+  }
+  // Alerta
+  if(d.alertaAtivo){
+    document.getElementById('alertaCard').style.display = 'block';
+    document.getElementById('alertaMsg').textContent = d.alertaMsg;
+  } else {
+    document.getElementById('alertaCard').style.display = 'none';
+  }
+}
+
+async function atualizarClima(){
+  toast('Atualizando clima...', 'info');
+  const d = await api('/api/clima/update', {method:'POST'});
+  if(d && d.ok){ toast('Clima atualizado!', 'success'); loadClima(); }
+  else toast('Erro ao atualizar.', 'error');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SD CARD FILE EXPLORER
+// ═══════════════════════════════════════════════════════════
+async function loadFiles(path){
+  const tree = document.getElementById('fileTree');
+  tree.innerHTML = '<div style="color:var(--muted);font-family:var(--mono);font-size:13px;padding:12px">Carregando...</div>';
+  const d = await api('/api/sd/list?path=' + encodeURIComponent(path));
+  if(!d){ tree.innerHTML = '<div style="color:var(--red);padding:12px;font-family:var(--mono);font-size:13px">Erro ao ler SD</div>'; return; }
+
+  let html = '';
+  if(path !== '/'){
+    const parent = path.substring(0, path.lastIndexOf('/')) || '/';
+    html += `<div class="file-dir" onclick="loadFiles('${parent}')">← voltar</div>`;
+  }
+
+  if(d.dirs) d.dirs.forEach(dir=>{
+    html += `<div class="file-dir" onclick="loadFiles('${dir.path}')">📁 ${dir.name}</div>`;
+  });
+
+  if(d.files) d.files.forEach(f=>{
+    html += `<div class="file-entry">
+      <span class="file-name">📄 ${f.name}</span>
+      <span class="file-size">${formatBytes(f.size)}</span>
+      <div class="file-actions">
+        <button class="file-btn" onclick="editarArquivo('${f.path}', '${f.name}')">Editar</button>
+        <button class="file-btn del" onclick="confirmar('Deletar ${f.name}?', ()=>deletarArquivo('${f.path}'))">Del</button>
+      </div>
+    </div>`;
+  });
+
+  if(!html) html = '<div style="color:var(--muted);padding:12px;font-family:var(--mono);font-size:13px">Pasta vazia.</div>';
+  tree.innerHTML = html;
+}
+
+async function editarArquivo(path, name){
+  document.getElementById('editorTitle').textContent = path;
+  document.getElementById('editorArea').value = 'Carregando...';
+  currentFile = path;
+  document.getElementById('editorModal').classList.add('open');
+  const d = await api('/api/sd/read?path=' + encodeURIComponent(path));
+  if(d) document.getElementById('editorArea').value = d.content || '';
+  else document.getElementById('editorArea').value = '(erro ao ler arquivo)';
+}
+
+async function salvarArquivoEditor(){
+  const content = document.getElementById('editorArea').value;
+  const d = await api('/api/sd/write', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({path: currentFile, content})
+  });
+  if(d && d.ok){ toast('Arquivo salvo!', 'success'); closeEditor(); }
+  else toast('Erro ao salvar.', 'error');
+}
+
+async function deletarArquivoAtual(){
+  confirmar('Deletar este arquivo permanentemente?', async ()=>{
+    closeEditor();
+    await deletarArquivo(currentFile);
+  });
+}
+
+async function deletarArquivo(path){
+  const d = await api('/api/sd/delete', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({path})
+  });
+  if(d && d.ok){ toast('Arquivo deletado.', 'success'); loadFiles(path.substring(0, path.lastIndexOf('/'))||'/'); }
+  else toast('Erro ao deletar.', 'error');
+}
+
+async function criarArquivo(){
+  const path = document.getElementById('newFilePath').value.trim();
+  const content = document.getElementById('newFileContent').value;
+  if(!path){ toast('Informe o caminho do arquivo.', 'error'); return; }
+  const d = await api('/api/sd/write', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({path, content})
+  });
+  if(d && d.ok){
+    toast('Arquivo criado!', 'success');
+    document.getElementById('newFilePath').value = '';
+    document.getElementById('newFileContent').value = '';
+    const dir = path.substring(0, path.lastIndexOf('/')) || '/';
+    loadFiles(dir);
+  } else toast('Erro ao criar arquivo.', 'error');
+}
+
+function closeEditor(){ document.getElementById('editorModal').classList.remove('open'); }
+
+// ═══════════════════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════════════════
+async function loadConfig(){
+  const d = await api('/api/config');
+  if(!d) return;
+  document.getElementById('cfgModelo').value = d.modelo || 'gemini-2.5-flash';
+  document.getElementById('cfgCidade').value = d.cidade || 'Muriae,BR';
+  document.getElementById('cfgPersonalidade').value = d.personalidade || '';
+  // toggles
+  document.getElementById('togLED').checked    = !d.ledDesabilitado;
+  document.getElementById('togOLED').checked   = !d.oledDesabilitado;
+  document.getElementById('togAlertas').checked = !d.alertasDesabilitados;
+  document.getElementById('togNoturno').checked = !d.noturnoDesabilitado;
+}
+
+async function salvarConfig(){
+  const d = await api('/api/config', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      modelo: document.getElementById('cfgModelo').value,
+      cidade: document.getElementById('cfgCidade').value
+    })
+  });
+  if(d && d.ok) toast('Configurações salvas!', 'success');
+  else toast('Erro ao salvar.', 'error');
+}
+
+async function salvarPersonalidade(){
+  const texto = document.getElementById('cfgPersonalidade').value;
+  const d = await api('/api/personalidade', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({texto})
+  });
+  if(d && d.ok) toast('Personalidade salva!', 'success');
+  else toast('Erro ao salvar.', 'error');
+}
+
+async function toggleFunc(name, enabled){
+  await api('/api/toggle', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name, enabled})
+  });
+  toast((enabled ? '✓ ' : '✗ ') + name + ' ' + (enabled ? 'ativado' : 'desativado'), 'info');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CONTROLE
+// ═══════════════════════════════════════════════════════════
+async function cmdReset(){
+  await api('/api/cmd/reset', {method:'POST'});
+  toast('Reiniciando...', 'warn');
+}
+
+async function cmdOTA(){
+  const d = await api('/api/cmd/ota', {method:'POST'});
+  if(d && d.ok) toast('OTA ativado por 5 min. IP: ' + d.ip, 'success');
+  else toast('Erro ao ativar OTA.', 'error');
+}
+
+async function cmdRelatorio(){
+  toast('Gerando relatório...', 'info');
+  const d = await api('/api/cmd/relatorio', {method:'POST'});
+  if(d && d.relatorio){
+    const box = document.getElementById('relatorioBox');
+    box.textContent = d.relatorio;
+    box.style.display = 'block';
+    toast('Relatório gerado!', 'success');
+  } else toast('Erro ao gerar.', 'error');
+}
+
+async function cmdLimparIA(){
+  const d = await api('/api/cmd/limpar-ia', {method:'POST'});
+  if(d && d.ok) toast('Histórico IA apagado.', 'success');
+  else toast('Erro.', 'error');
+}
+
+async function cmdLimparLogs(){
+  const d = await api('/api/cmd/limpar-logs', {method:'POST'});
+  if(d && d.ok) toast('Logs apagados.', 'success');
+  else toast('Erro.', 'error');
+}
+
+async function cmdLimparMem(){
+  const d = await api('/api/cmd/limpar-mem', {method:'POST'});
+  if(d && d.ok) toast('Memória apagada.', 'success');
+  else toast('Erro.', 'error');
+}
+
+async function fetchLog(){
+  const d = await api('/api/log');
+  if(!d || !d.lines) return;
+  const box = document.getElementById('logBox');
+  box.innerHTML = d.lines.map(l=>{
+    const cl = l.includes('Erro')||l.includes('erro')||l.includes('✗') ? 'err' :
+               l.includes('OK')||l.includes('✓')||l.includes('ok') ? 'ok' :
+               l.includes('Warn') ? 'warn' : '';
+    return `<span class="log-line ${cl}">${escHtml(l)}</span>`;
+  }).join('\n');
+  box.scrollTop = box.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════
+function confirmar(msg, cb){
+  if(confirm(msg)) cb();
+}
+
+function toast(msg, type='info'){
+  const wrap = document.getElementById('toast');
+  const el = document.createElement('div');
+  el.className = 'toast-item ' + type;
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(), 300); }, 3000);
+}
+
+function formatBytes(b){
+  if(b<1024) return b+'B';
+  if(b<1048576) return (b/1024).toFixed(1)+'KB';
+  return (b/1048576).toFixed(1)+'MB';
+}
+
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>
+)rawhtml";
+
+#endif // WEB_PANEL_H
