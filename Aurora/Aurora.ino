@@ -306,6 +306,7 @@ void loop(){
             }
             exibirAgendaOLED(eventosDia, _diaHoje);
         }
+        lastState = pressed;
         if(agendaVisivel && millis() - tExib > 30000UL)
             agendaVisivel = false;
     }
@@ -323,6 +324,7 @@ void loop(){
             Serial.printf("[BTN3] OLED %s\n", oledLigado ? "ligado" : "desligado");
             if(oledLigado) lastDisplay = 0;
         }
+        lastState = pressed;
     }
 
     // ════════════════════════════════════════════════════════
@@ -337,6 +339,7 @@ void loop(){
             Serial.println("[BTN45] Menu principal");
             enviarMenu();
         }
+        lastState = pressed;
     }
 
     // ════════════════════════════════════════════════════════
@@ -371,6 +374,7 @@ void loop(){
                 display.display();
             }
         }
+        lastState = pressed;
         // Refresca a tela web info a cada 5s enquanto visível
         // (o IP não muda, mas muda o estado da sessão)
         static unsigned long _lastWebRefresh = 0;

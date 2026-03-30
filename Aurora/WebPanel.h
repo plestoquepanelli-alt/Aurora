@@ -715,6 +715,9 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
   @media(max-width:1024px){
     body::before { display: none; }
   }
+  @media(max-width:1024px){
+    body::before { display: none; }
+  }
 
   /* ── ANIMATIONS ───────────────────────────────────────────── */
   .fade-in { animation: fadeIn .3s ease; }
