@@ -183,7 +183,7 @@ void loop(){
     bool  _ok      = getLocalTime(&_lt);
     int   _hora    = _ok ? _lt.tm_hour : 12;
     int   _diaHoje = _ok ? _lt.tm_mday : 0;
-    bool  _noturno = (_hora >= 22 || _hora < 8);
+    bool  _noturno = isModoNoturnoAgora();
 
     // ── Serviços periódicos ───────────────────────────────────
     loopOTA();
@@ -214,6 +214,7 @@ void loop(){
     // Controla exibição da tela web info por 30s
     if(webInfoVisivel && millis() - webInfoTimer > 30000UL){
         webInfoVisivel = false;
+        lastDisplay = 0; // força retorno imediato ao display normal
     }
 
     if(!oledLigado){
@@ -265,12 +266,34 @@ void loop(){
         }
     }
 
+    // ── Debounce robusto por estado estável (LOW = pressionado) ─
+    auto botaoPressionado = [&](uint8_t pin, bool &stableState, bool &lastRawState, unsigned long &lastChangeMs, unsigned long debounceMs)->bool {
+        bool rawPressed = (digitalRead(pin) == LOW);
+        if(lastChangeMs == 0){
+            stableState = rawPressed;
+            lastRawState = rawPressed;
+            lastChangeMs = millis();
+            return false;
+        }
+        if(rawPressed != lastRawState){
+            lastRawState = rawPressed;
+            lastChangeMs = millis();
+        }
+        if((millis() - lastChangeMs) >= debounceMs && rawPressed != stableState){
+            stableState = rawPressed;
+            if(stableState) return true; // evento só na borda de descida
+        }
+        return false;
+    };
+
     // ════════════════════════════════════════════════════════
     //  BOTÃO 1 — AGENDA (pino 14)
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotao = 0, tExib = 0;
-        if(digitalRead(BTN_AGENDA) == LOW && millis() - tBotao > 500){
+        static bool stableState = false, lastRawState = false;
+        static unsigned long lastChange = 0;
+        if(botaoPressionado(BTN_AGENDA, stableState, lastRawState, lastChange, 45) && millis() - tBotao > 300){
             tBotao = tExib = millis();
             agendaVisivel  = true;
             webInfoVisivel = false;   // cancela web info se estava ativa
@@ -298,7 +321,9 @@ void loop(){
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotaoDisp = 0;
-        if(digitalRead(BTN_DISPLAY) == LOW && millis() - tBotaoDisp > 500){
+        static bool stableState = false, lastRawState = false;
+        static unsigned long lastChange = 0;
+        if(botaoPressionado(BTN_DISPLAY, stableState, lastRawState, lastChange, 45) && millis() - tBotaoDisp > 300){
             tBotaoDisp = millis();
             oledLigado = !oledLigado;
             Serial.printf("[BTN3] OLED %s\n", oledLigado ? "ligado" : "desligado");
@@ -311,7 +336,9 @@ void loop(){
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotaoMenu = 0;
-        if(digitalRead(BTN_MENU) == LOW && millis() - tBotaoMenu > 800){
+        static bool stableState = false, lastRawState = false;
+        static unsigned long lastChange = 0;
+        if(botaoPressionado(BTN_MENU, stableState, lastRawState, lastChange, 50) && millis() - tBotaoMenu > 400){
             tBotaoMenu = millis();
             Serial.println("[BTN45] Menu principal");
             enviarMenu();
@@ -326,7 +353,9 @@ void loop(){
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotaoWeb = 0;
-        if(digitalRead(BTN_WEB) == LOW && millis() - tBotaoWeb > 500){
+        static bool stableState = false, lastRawState = false;
+        static unsigned long lastChange = 0;
+        if(botaoPressionado(BTN_WEB, stableState, lastRawState, lastChange, 45) && millis() - tBotaoWeb > 300){
             tBotaoWeb = millis();
             Serial.println("[BTN46] Web info OLED");
             agendaVisivel  = false;   // cancela agenda se estava ativa
