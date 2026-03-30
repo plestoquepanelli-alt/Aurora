@@ -307,6 +307,26 @@ void loop(){
         }
     }
 
+    // ── Debounce robusto por estado estável (LOW = pressionado) ─
+    auto botaoPressionado = [&](uint8_t pin, bool &stableState, bool &lastRawState, unsigned long &lastChangeMs, unsigned long debounceMs)->bool {
+        bool rawPressed = (digitalRead(pin) == LOW);
+        if(lastChangeMs == 0){
+            stableState = rawPressed;
+            lastRawState = rawPressed;
+            lastChangeMs = millis();
+            return false;
+        }
+        if(rawPressed != lastRawState){
+            lastRawState = rawPressed;
+            lastChangeMs = millis();
+        }
+        if((millis() - lastChangeMs) >= debounceMs && rawPressed != stableState){
+            stableState = rawPressed;
+            if(stableState) return true; // evento só na borda de descida
+        }
+        return false;
+    };
+
     // ════════════════════════════════════════════════════════
     //  BOTÃO 1 — AGENDA (pino 14)
     // ════════════════════════════════════════════════════════
@@ -333,6 +353,7 @@ void loop(){
             }
             exibirAgendaOLED(eventosDia, _diaHoje);
         }
+        lastState = pressed;
         if(agendaVisivel && millis() - tExib > 30000UL)
             agendaVisivel = false;
     }
@@ -350,6 +371,7 @@ void loop(){
             Serial.printf("[BTN3] OLED %s\n", oledLigado ? "ligado" : "desligado");
             if(oledLigado) lastDisplay = 0;
         }
+        lastState = pressed;
     }
 
     // ════════════════════════════════════════════════════════
@@ -364,6 +386,7 @@ void loop(){
             Serial.println("[BTN45] Menu principal");
             enviarMenu();
         }
+        lastState = pressed;
     }
 
     // ════════════════════════════════════════════════════════
@@ -398,6 +421,7 @@ void loop(){
                 display.display();
             }
         }
+        lastState = pressed;
         // Refresca a tela web info a cada 5s enquanto visível
         // (o IP não muda, mas muda o estado da sessão)
         static unsigned long _lastWebRefresh = 0;
