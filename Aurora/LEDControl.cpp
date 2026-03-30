@@ -9,8 +9,6 @@ SystemState currentState = BOOT;
 bool ledHabilitado = true;
 
 unsigned long lastLedUpdate = 0;
-float faseBranco = 0.0;
-float faseLaranja = 0.0;
 uint8_t blinkStep = 0;
 unsigned long lastBlink = 0;
 LedColor corWiFi       = {0, 0, 80};
