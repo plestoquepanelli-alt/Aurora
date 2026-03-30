@@ -307,6 +307,12 @@ static void handleConfigGet(){
   cSucc["r"] = succ.r; cSucc["g"] = succ.g; cSucc["b"] = succ.b;
   JsonObject cErr = cores.createNestedObject("error");
   cErr["r"] = err.r; cErr["g"] = err.g; cErr["b"] = err.b;
+  JsonObject efeitos = doc.createNestedObject("ledEffects");
+  efeitos["wifi"] = obterEfeitoLED("wifi");
+  efeitos["idle"] = obterEfeitoLED("idle");
+  efeitos["processing"] = obterEfeitoLED("processing");
+  efeitos["success"] = obterEfeitoLED("success");
+  efeitos["error"] = obterEfeitoLED("error");
   String out; serializeJson(doc, out);
   sendJSON(out);
 }
@@ -331,6 +337,14 @@ static void handleConfigPost(){
         constrain((int)(c["g"] | 0), 0, 255),
         constrain((int)(c["b"] | 0), 0, 255)
       );
+    }
+  }
+  if(doc.containsKey("ledEffects")){
+    JsonObject efeitos = doc["ledEffects"].as<JsonObject>();
+    const char* nomes[] = {"wifi", "idle", "processing", "success", "error"};
+    for(int i=0; i<5; i++){
+      if(!efeitos.containsKey(nomes[i])) continue;
+      definirEfeitoLED(nomes[i], efeitos[nomes[i]].as<String>());
     }
   }
   sendJSON("{\"ok\":true}");

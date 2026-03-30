@@ -715,9 +715,6 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
   @media(max-width:1024px){
     body::before { display: none; }
   }
-  @media(max-width:1024px){
-    body::before { display: none; }
-  }
 
   /* ── ANIMATIONS ───────────────────────────────────────────── */
   .fade-in { animation: fadeIn .3s ease; }
@@ -1028,27 +1025,8 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
     </div>
 
     <div class="card">
-      <div class="card-title">Cores do LED</div>
-      <div class="form-row">
-        <div><div class="form-label">WiFi conectando</div><input class="inp" type="color" id="ledWifi"><input class="inp" id="ledWifiHex" maxlength="7" placeholder="#0000ff"></div>
-        <div><div class="form-label">Modo idle</div><input class="inp" type="color" id="ledIdle"><input class="inp" id="ledIdleHex" maxlength="7" placeholder="#00aaff"></div>
-      </div>
-      <div class="form-row">
-        <div><div class="form-label">Processando IA</div><input class="inp" type="color" id="ledProcessing"><input class="inp" id="ledProcessingHex" maxlength="7" placeholder="#ff7700"></div>
-        <div><div class="form-label">Sucesso</div><input class="inp" type="color" id="ledSuccess"><input class="inp" id="ledSuccessHex" maxlength="7" placeholder="#00ff00"></div>
-      </div>
-      <div>
-        <div class="form-label">Erro</div>
-        <input class="inp" type="color" id="ledError"><input class="inp" id="ledErrorHex" maxlength="7" placeholder="#ff0000">
-      </div>
-      <div class="form-label">Presets rápidos</div>
-      <div class="preset-row">
-        <button class="preset-btn" onclick="aplicarPresetTodos('#0050ff')"><span class="preset-dot" style="background:#0050ff"></span>Azul</button>
-        <button class="preset-btn" onclick="aplicarPresetTodos('#00b400')"><span class="preset-dot" style="background:#00b400"></span>Verde</button>
-        <button class="preset-btn" onclick="aplicarPresetTodos('#b40000')"><span class="preset-dot" style="background:#b40000"></span>Vermelho</button>
-        <button class="preset-btn" onclick="aplicarPresetTodos('#ff7800')"><span class="preset-dot" style="background:#ff7800"></span>Laranja</button>
-        <button class="preset-btn" onclick="aplicarPresetTodos('#7a2fff')"><span class="preset-dot" style="background:#7a2fff"></span>Roxo</button>
-      </div>
+      <div class="card-title">LED por Estado (cor + efeito)</div>
+      <div id="ledStatesBox"></div>
       <button class="btn btn-primary" onclick="salvarCoresLED()">Salvar Cores do LED</button>
     </div>
 
@@ -1135,6 +1113,29 @@ var loggedIn = false;
 var currentFile = '';
 var refreshTimer = null;
 var clockTimer = null;
+var ESTADOS_LED = ['wifi','idle','processing','success','error'];
+var NOME_ESTADO = {wifi:'WiFi conectando', idle:'Modo idle', processing:'Processando IA', success:'Sucesso', error:'Erro'};
+var CORES_LED = [
+  {id:'vermelho', nome:'Vermelho', hex:'#ff0000'},
+  {id:'verde', nome:'Verde', hex:'#00b400'},
+  {id:'azul', nome:'Azul', hex:'#0050ff'},
+  {id:'amarelo', nome:'Amarelo', hex:'#ffd000'},
+  {id:'laranja', nome:'Laranja', hex:'#ff7800'},
+  {id:'roxo', nome:'Roxo', hex:'#7a2fff'},
+  {id:'rosa', nome:'Rosa', hex:'#ff4fb8'},
+  {id:'ciano', nome:'Ciano', hex:'#00d6d6'},
+  {id:'branco', nome:'Branco', hex:'#ffffff'},
+  {id:'gelo', nome:'Gelo', hex:'#b4f0ff'},
+  {id:'lime', nome:'Lima', hex:'#99ff00'},
+  {id:'amber', nome:'Âmbar', hex:'#ffb347'}
+];
+var EFEITOS_LED = [
+  {id:'arco-iris', nome:'Arco-íris'},
+  {id:'strobo_rapido', nome:'Strobo rápido'},
+  {id:'strobo_medio', nome:'Strobo médio'},
+  {id:'strobo_devagar', nome:'Strobo devagar'},
+  {id:'respiracao', nome:'Respiração'}
+];
 
 function request(path, opts, cb){
   opts = opts || {};
@@ -1190,7 +1191,8 @@ function doLogout(){
 
 function startApp(){
   preencherHoras();
-  prepararCamposCor();
+  montarControlesLED();
+  resetarAbas();
   refreshDash();
   loadClima();
   loadFiles('/aurora');
@@ -1201,6 +1203,16 @@ function startApp(){
     var n = new Date();
     document.getElementById('topTime').textContent = pad2(n.getHours()) + ':' + pad2(n.getMinutes());
   }, 1000);
+}
+
+function resetarAbas(){
+  var tabs = document.querySelectorAll('.nav-tab');
+  for(var i=0; i<tabs.length; i++) tabs[i].className = tabs[i].className.replace(' active', '');
+  if(tabs.length) tabs[0].className += ' active';
+  var panels = document.querySelectorAll('.tab-panel');
+  for(var j=0; j<panels.length; j++) panels[j].style.display = 'none';
+  var dash = document.getElementById('tab-dashboard');
+  if(dash) dash.style.display = 'block';
 }
 
 function showTab(name, btn){
@@ -1395,11 +1407,11 @@ function loadConfig(){
     document.getElementById('cfgNoturnoInicio').value = String(d.noturnoInicio != null ? d.noturnoInicio : 22);
     document.getElementById('cfgNoturnoFim').value = String(d.noturnoFim != null ? d.noturnoFim : 8);
 
-    preencherCor('ledWifi', 'ledWifiHex', d.ledColors && d.ledColors.wifi, '#000050');
-    preencherCor('ledIdle', 'ledIdleHex', d.ledColors && d.ledColors.idle, '#0050ff');
-    preencherCor('ledProcessing', 'ledProcessingHex', d.ledColors && d.ledColors.processing, '#ff7800');
-    preencherCor('ledSuccess', 'ledSuccessHex', d.ledColors && d.ledColors.success, '#00b400');
-    preencherCor('ledError', 'ledErrorHex', d.ledColors && d.ledColors.error, '#b40000');
+    preencherControleLED('wifi', d.ledColors && d.ledColors.wifi, d.ledEffects && d.ledEffects.wifi);
+    preencherControleLED('idle', d.ledColors && d.ledColors.idle, d.ledEffects && d.ledEffects.idle);
+    preencherControleLED('processing', d.ledColors && d.ledColors.processing, d.ledEffects && d.ledEffects.processing);
+    preencherControleLED('success', d.ledColors && d.ledColors.success, d.ledEffects && d.ledEffects.success);
+    preencherControleLED('error', d.ledColors && d.ledColors.error, d.ledEffects && d.ledEffects.error);
   });
 }
 
@@ -1409,13 +1421,8 @@ function salvarConfig(callback){
     cidade: document.getElementById('cfgCidade').value,
     noturnoInicio: parseInt(document.getElementById('cfgNoturnoInicio').value, 10),
     noturnoFim: parseInt(document.getElementById('cfgNoturnoFim').value, 10),
-    ledColors: {
-      wifi: hexToRgb(corAtual('ledWifi', 'ledWifiHex')),
-      idle: hexToRgb(corAtual('ledIdle', 'ledIdleHex')),
-      processing: hexToRgb(corAtual('ledProcessing', 'ledProcessingHex')),
-      success: hexToRgb(corAtual('ledSuccess', 'ledSuccessHex')),
-      error: hexToRgb(corAtual('ledError', 'ledErrorHex'))
-    }
+    ledColors: coletarCoresLED(),
+    ledEffects: coletarEfeitosLED()
   };
   request('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)}, function(d){
     if(callback) callback(d && d.ok);
@@ -1491,52 +1498,82 @@ function preencherHoras(){
   }
 }
 
-function prepararCamposCor(){
-  vincularCor('ledWifi', 'ledWifiHex');
-  vincularCor('ledIdle', 'ledIdleHex');
-  vincularCor('ledProcessing', 'ledProcessingHex');
-  vincularCor('ledSuccess', 'ledSuccessHex');
-  vincularCor('ledError', 'ledErrorHex');
-}
-
-function vincularCor(idColor, idHex){
-  var c = document.getElementById(idColor);
-  var h = document.getElementById(idHex);
-  if(c) c.onchange = function(){ h.value = normalizarHex(c.value); };
-  if(h) h.onkeyup = function(){ var v = normalizarHex(h.value); if(v.length === 7 && c) c.value = v; };
-}
-
-function preencherCor(idColor, idHex, rgb, fallback){
-  var hex = rgb ? rgbToHex(rgb) : fallback;
-  var colorEl = document.getElementById(idColor);
-  colorEl.value = hex;
-  if(colorEl.type !== 'color'){
-    colorEl.style.display = 'none';
+function montarControlesLED(){
+  var box = document.getElementById('ledStatesBox');
+  if(!box || box.getAttribute('data-ready') === '1') return;
+  var html = '';
+  for(var i=0; i<ESTADOS_LED.length; i++){
+    var estado = ESTADOS_LED[i];
+    html += '<div class="form-row" style="margin-bottom:10px">' +
+      '<div><div class="form-label">' + NOME_ESTADO[estado] + ' · Cor</div><select class="inp" id="ledColor_' + estado + '"></select></div>' +
+      '<div><div class="form-label">' + NOME_ESTADO[estado] + ' · Efeito</div><select class="inp" id="ledEffect_' + estado + '"></select></div>' +
+      '</div>';
   }
-  document.getElementById(idHex).value = hex;
+  box.innerHTML = html;
+  for(var c=0; c<ESTADOS_LED.length; c++){
+    var st = ESTADOS_LED[c];
+    popularSelectCor('ledColor_' + st);
+    popularSelectEfeito('ledEffect_' + st);
+  }
+  box.setAttribute('data-ready', '1');
 }
 
-function corAtual(idColor, idHex){
-  var hex = normalizarHex(document.getElementById(idHex).value || document.getElementById(idColor).value);
-  document.getElementById(idHex).value = hex;
-  document.getElementById(idColor).value = hex;
-  return hex;
+function popularSelectCor(id){
+  var sel = document.getElementById(id);
+  if(!sel) return;
+  sel.innerHTML = '';
+  for(var i=0; i<CORES_LED.length; i++){
+    sel.options.add(new Option(CORES_LED[i].nome, CORES_LED[i].hex));
+  }
 }
 
-function aplicarPresetTodos(hex){
-  setCor('ledWifi', 'ledWifiHex', hex);
-  setCor('ledIdle', 'ledIdleHex', hex);
-  setCor('ledProcessing', 'ledProcessingHex', hex);
-  setCor('ledSuccess', 'ledSuccessHex', hex);
-  setCor('ledError', 'ledErrorHex', hex);
+function popularSelectEfeito(id){
+  var sel = document.getElementById(id);
+  if(!sel) return;
+  sel.innerHTML = '';
+  for(var i=0; i<EFEITOS_LED.length; i++){
+    sel.options.add(new Option(EFEITOS_LED[i].nome, EFEITOS_LED[i].id));
+  }
 }
 
-function setCor(idColor, idHex, hex){
-  var v = normalizarHex(hex);
-  var c = document.getElementById(idColor);
-  var h = document.getElementById(idHex);
-  if(c) c.value = v;
-  if(h) h.value = v;
+function preencherControleLED(estado, rgb, efeito){
+  var hex = rgb ? rgbToHex(rgb) : '#0050ff';
+  var corSel = document.getElementById('ledColor_' + estado);
+  var efSel = document.getElementById('ledEffect_' + estado);
+  if(corSel) corSel.value = corMaisProxima(hex);
+  if(efSel) efSel.value = efeito || 'respiracao';
+}
+
+function coletarCoresLED(){
+  var out = {};
+  for(var i=0; i<ESTADOS_LED.length; i++){
+    var st = ESTADOS_LED[i];
+    var sel = document.getElementById('ledColor_' + st);
+    out[st] = hexToRgb(sel ? sel.value : '#0050ff');
+  }
+  return out;
+}
+
+function coletarEfeitosLED(){
+  var out = {};
+  for(var i=0; i<ESTADOS_LED.length; i++){
+    var st = ESTADOS_LED[i];
+    var sel = document.getElementById('ledEffect_' + st);
+    out[st] = sel ? sel.value : 'respiracao';
+  }
+  return out;
+}
+
+function corMaisProxima(hex){
+  var alvo = hexToRgb(hex);
+  var melhor = CORES_LED[0].hex;
+  var distMelhor = 999999;
+  for(var i=0; i<CORES_LED.length; i++){
+    var c = hexToRgb(CORES_LED[i].hex);
+    var d = Math.abs(c.r-alvo.r) + Math.abs(c.g-alvo.g) + Math.abs(c.b-alvo.b);
+    if(d < distMelhor){ distMelhor = d; melhor = CORES_LED[i].hex; }
+  }
+  return melhor;
 }
 
 function normalizarHex(hex){

@@ -269,6 +269,12 @@ void loop(){
     // ── Debounce robusto por estado estável (LOW = pressionado) ─
     auto botaoPressionado = [&](uint8_t pin, bool &stableState, bool &lastRawState, unsigned long &lastChangeMs, unsigned long debounceMs)->bool {
         bool rawPressed = (digitalRead(pin) == LOW);
+        if(lastChangeMs == 0){
+            stableState = rawPressed;
+            lastRawState = rawPressed;
+            lastChangeMs = millis();
+            return false;
+        }
         if(rawPressed != lastRawState){
             lastRawState = rawPressed;
             lastChangeMs = millis();
