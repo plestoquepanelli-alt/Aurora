@@ -729,11 +729,11 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
 
   <!-- NAV TABS -->
   <div class="nav">
-    <button class="nav-tab active" onclick="showTab('dashboard')">Dashboard</button>
-    <button class="nav-tab" onclick="showTab('clima')">Clima</button>
-    <button class="nav-tab" onclick="showTab('sdcard')">SD Card</button>
-    <button class="nav-tab" onclick="showTab('config')">Configurações</button>
-    <button class="nav-tab" onclick="showTab('controle')">Controle</button>
+    <button class="nav-tab active" onclick="showTab('dashboard', this)">Dashboard</button>
+    <button class="nav-tab" onclick="showTab('clima', this)">Clima</button>
+    <button class="nav-tab" onclick="showTab('sdcard', this)">SD Card</button>
+    <button class="nav-tab" onclick="showTab('config', this)">Configurações</button>
+    <button class="nav-tab" onclick="showTab('controle', this)">Controle</button>
   </div>
 
   <!-- ═══════════════ DASHBOARD ══════════════════════════ -->
@@ -989,23 +989,26 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
           <select class="inp" id="cfgNoturnoFim"></select>
         </div>
       </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="salvarHorarioNoturno()">Salvar Horário Noturno</button>
+      </div>
     </div>
 
     <div class="card">
       <div class="card-title">Cores do LED</div>
       <div class="form-row">
-        <div><div class="form-label">WiFi conectando</div><input class="inp" type="color" id="ledWifi"></div>
-        <div><div class="form-label">Modo idle</div><input class="inp" type="color" id="ledIdle"></div>
+        <div><div class="form-label">WiFi conectando</div><input class="inp" type="color" id="ledWifi"><input class="inp" id="ledWifiHex" maxlength="7" placeholder="#0000ff"></div>
+        <div><div class="form-label">Modo idle</div><input class="inp" type="color" id="ledIdle"><input class="inp" id="ledIdleHex" maxlength="7" placeholder="#00aaff"></div>
       </div>
       <div class="form-row">
-        <div><div class="form-label">Processando IA</div><input class="inp" type="color" id="ledProcessing"></div>
-        <div><div class="form-label">Sucesso</div><input class="inp" type="color" id="ledSuccess"></div>
+        <div><div class="form-label">Processando IA</div><input class="inp" type="color" id="ledProcessing"><input class="inp" id="ledProcessingHex" maxlength="7" placeholder="#ff7700"></div>
+        <div><div class="form-label">Sucesso</div><input class="inp" type="color" id="ledSuccess"><input class="inp" id="ledSuccessHex" maxlength="7" placeholder="#00ff00"></div>
       </div>
       <div>
         <div class="form-label">Erro</div>
-        <input class="inp" type="color" id="ledError">
+        <input class="inp" type="color" id="ledError"><input class="inp" id="ledErrorHex" maxlength="7" placeholder="#ff0000">
       </div>
-      <button class="btn btn-primary" onclick="salvarConfig()">Salvar cores e horários</button>
+      <button class="btn btn-primary" onclick="salvarCoresLED()">Salvar Cores do LED</button>
     </div>
 
   </div>
@@ -1090,17 +1093,38 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
 var loggedIn = false;
 var currentFile = '';
 var refreshTimer = null;
+var clockTimer = null;
+
+function request(path, opts, cb){
+  opts = opts || {};
+  cb = cb || function(){};
+  var xhr = new XMLHttpRequest();
+  xhr.open(opts.method || 'GET', path, true);
+  xhr.timeout = 12000;
+  xhr.setRequestHeader('Accept', 'application/json');
+  if(opts.headers){
+    for(var k in opts.headers){ if(opts.headers.hasOwnProperty(k)) xhr.setRequestHeader(k, opts.headers[k]); }
+  }
+  xhr.onreadystatechange = function(){
+    if(xhr.readyState !== 4) return;
+    if(xhr.status === 401){ doLogout(); cb(null); return; }
+    if(xhr.status < 200 || xhr.status >= 300){ cb(null); return; }
+    try { cb(JSON.parse(xhr.responseText)); }
+    catch(e){ cb(null); }
+  };
+  xhr.onerror = function(){ cb(null); };
+  xhr.ontimeout = function(){ cb(null); };
+  xhr.send(opts.body || null);
+}
 
 function doLogin(){
   var pin = document.getElementById('loginPin').value;
-  fetch('/api/login', {
+  request('/api/login', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({pin: pin})
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(d){
-    if(d.ok){
+  }, function(d){
+    if(d && d.ok){
       loggedIn = true;
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('app').style.display = 'block';
@@ -1109,111 +1133,98 @@ function doLogin(){
       document.getElementById('loginErr').textContent = 'Senha incorreta.';
       document.getElementById('loginPin').value = '';
     }
-  })
-  .catch(function(){ document.getElementById('loginErr').textContent = 'Erro de conexão.'; });
+  });
 }
 
 function doLogout(){
-  fetch('/api/logout', {method:'POST'})
-    .then(function(){})
-    .catch(function(){})
-    .then(function(){
-      loggedIn = false;
-      clearInterval(refreshTimer);
-      document.getElementById('app').style.display = 'none';
-      document.getElementById('loginScreen').style.display = 'flex';
-      document.getElementById('loginPin').value = '';
-      document.getElementById('loginErr').textContent = '';
-    });
+  request('/api/logout', {method:'POST'}, function(){});
+  loggedIn = false;
+  clearInterval(refreshTimer);
+  clearInterval(clockTimer);
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginPin').value = '';
+  document.getElementById('loginErr').textContent = '';
 }
 
 function startApp(){
   preencherHoras();
+  prepararCamposCor();
   refreshDash();
   loadClima();
   loadFiles('/aurora');
   loadConfig();
   refreshTimer = setInterval(function(){ if(loggedIn) refreshDash(); }, 12000);
-  setInterval(function(){
+  clearInterval(clockTimer);
+  clockTimer = setInterval(function(){
     var n = new Date();
     document.getElementById('topTime').textContent = pad2(n.getHours()) + ':' + pad2(n.getMinutes());
   }, 1000);
 }
 
-function showTab(name){
+function showTab(name, btn){
+  var i;
   var panels = document.querySelectorAll('.tab-panel');
-  for(var i=0;i<panels.length;i++) panels[i].classList.remove('active');
+  for(i=0;i<panels.length;i++) panels[i].style.display = 'none';
   var tabs = document.querySelectorAll('.nav-tab');
-  for(var j=0;j<tabs.length;j++) tabs[j].classList.remove('active');
-  document.getElementById('tab-'+name).classList.add('active');
-  if(window.event && window.event.currentTarget) window.event.currentTarget.classList.add('active');
+  for(i=0;i<tabs.length;i++) tabs[i].className = tabs[i].className.replace(' active', '');
+  var tab = document.getElementById('tab-' + name);
+  if(tab) tab.style.display = 'block';
+  if(btn) btn.className += ' active';
   if(name==='clima') loadClima();
   if(name==='sdcard') loadFiles('/aurora');
   if(name==='config') loadConfig();
 }
 
-function api(path, opts){
-  opts = opts || {};
-  return fetch(path, opts)
-    .then(function(r){
-      if(r.status === 401){ doLogout(); return null; }
-      return r.json();
-    })
-    .catch(function(){ return null; });
-}
-
 function refreshDash(){
   var el = document.getElementById('refreshIcon');
   el.textContent = '⟳';
-  api('/api/status').then(function(d){
+  request('/api/status', {}, function(d){
     el.textContent = '↻';
     if(!d) return;
-    var t = d.chipTemp || 0;
+    var t = Number(d.chipTemp || 0);
     var tEl = document.getElementById('statChipTemp');
-    tEl.innerHTML = num1(t) + '<span class="stat-unit">°C</span>';
+    tEl.innerHTML = t.toFixed(1) + '<span class="stat-unit">°C</span>';
     tEl.className = 'stat-value' + (t > 75 ? ' bad' : t > 55 ? ' warn' : ' ok');
 
-    var hp = d.heapPct || 0;
+    var hp = Number(d.heapPct || 0);
     var hEl = document.getElementById('statHeap');
     hEl.innerHTML = hp + '<span class="stat-unit">%</span>';
     hEl.className = 'stat-value' + (hp < 20 ? ' bad' : hp < 40 ? ' warn' : ' ok');
     document.getElementById('heapPct').textContent = hp + '%';
     var hBar = document.getElementById('heapBar');
     hBar.style.width = hp + '%';
-    hBar.className = 'progress-fill' + (hp < 20 ? ' bad' : hp < 40 ? ' warn' : '');
 
-    var rssi = d.rssi || 0;
-    var wp = d.wifiPct || 0;
+    var rssi = Number(d.rssi || 0);
+    var wp = Number(d.wifiPct || 0);
     var wEl = document.getElementById('statWifi');
     wEl.innerHTML = rssi + '<span class="stat-unit">dBm</span>';
     wEl.className = 'stat-value' + (wp < 30 ? ' bad' : wp < 60 ? ' warn' : ' ok');
     document.getElementById('wifiPct').textContent = wp + '%';
     var wBar = document.getElementById('wifiBar');
     wBar.style.width = wp + '%';
-    wBar.className = 'progress-fill' + (wp < 30 ? ' bad' : wp < 60 ? ' warn' : '');
 
     document.getElementById('statUptime').textContent = d.uptime || '--';
     document.getElementById('statQuestions').textContent = d.questions || '0';
-    document.getElementById('statClimaTemp').innerHTML = num1(d.climaTemp || 0) + '<span class="stat-unit">°C</span>';
+    document.getElementById('statClimaTemp').innerHTML = Number(d.climaTemp || 0).toFixed(1) + '<span class="stat-unit">°C</span>';
     document.getElementById('infoIP').textContent = d.ip || '--';
     document.getElementById('infoSSID').textContent = d.ssid || '--';
     document.getElementById('infoModelo').textContent = d.modelo || '--';
     document.getElementById('infoCidade').textContent = d.cidade || '--';
     document.getElementById('infoSD').textContent = d.sdOK ? '✓ OK' : '✗ Falha';
     document.getElementById('infoOTA').textContent = d.otaAtivo ? '● Ativo' : 'Inativo';
-    document.getElementById('connDot').title = 'IP: ' + (d.ip||'--');
   });
 }
 
 function loadClima(){
-  api('/api/clima').then(function(d){
+  request('/api/clima', {}, function(d){
     if(!d) return;
     document.getElementById('climaCidade').textContent = d.cidade || '--';
-    document.getElementById('cTemp').innerHTML = num1(d.temp) + '<span class="stat-unit">°C</span>';
-    document.getElementById('cSens').innerHTML = num1(d.sensTermica) + '<span class="stat-unit">°C</span>';
-    document.getElementById('cHum').innerHTML = (d.umidade || 0) + '<span class="stat-unit">%</span>';
-    document.getElementById('cPressao').innerHTML = (d.pressao || 0) + '<span class="stat-unit">hPa</span>';
-    document.getElementById('cVento').innerHTML = num1(d.vento) + '<span class="stat-unit">km/h</span>';
+    document.getElementById('cTemp').innerHTML = Number(d.temp || 0).toFixed(1) + '<span class="stat-unit">°C</span>';
+    document.getElementById('cSens').innerHTML = Number(d.sensTermica || 0).toFixed(1) + '<span class="stat-unit">°C</span>';
+    document.getElementById('cHum').innerHTML = Number(d.umidade || 0) + '<span class="stat-unit">%</span>';
+    document.getElementById('cPressao').innerHTML = Number(d.pressao || 0) + '<span class="stat-unit">hPa</span>';
+    document.getElementById('cVento').innerHTML = Number(d.vento || 0).toFixed(1) + '<span class="stat-unit">km/h</span>';
     document.getElementById('cDesc').textContent = d.descricao || '--';
     if(d.prev){
       document.getElementById('ph1').textContent = d.prev.h1 || '+3h';
@@ -1226,18 +1237,14 @@ function loadClima(){
       document.getElementById('pr2').textContent = Math.round(d.prev.r2 || 0) + '%';
       document.getElementById('pr3').textContent = Math.round(d.prev.r3 || 0) + '%';
     }
-    if(d.alertaAtivo){
-      document.getElementById('alertaCard').style.display = 'block';
-      document.getElementById('alertaMsg').textContent = d.alertaMsg || '';
-    } else {
-      document.getElementById('alertaCard').style.display = 'none';
-    }
+    document.getElementById('alertaCard').style.display = d.alertaAtivo ? 'block' : 'none';
+    document.getElementById('alertaMsg').textContent = d.alertaMsg || '';
   });
 }
 
 function atualizarClima(){
   toast('Atualizando clima...', 'info');
-  api('/api/clima/update', {method:'POST'}).then(function(d){
+  request('/api/clima/update', {method:'POST'}, function(d){
     if(d && d.ok){ toast('Clima atualizado!', 'success'); loadClima(); }
     else toast('Erro ao atualizar.', 'error');
   });
@@ -1246,52 +1253,45 @@ function atualizarClima(){
 function loadFiles(path){
   var tree = document.getElementById('fileTree');
   tree.innerHTML = '<div style="color:var(--muted);font-family:var(--mono);font-size:13px;padding:12px">Carregando...</div>';
-  api('/api/sd/list?path=' + encodeURIComponent(path)).then(function(d){
-    if(!d){ tree.innerHTML = '<div style="color:var(--red);padding:12px;font-family:var(--mono);font-size:13px">Erro ao ler SD</div>'; return; }
+  request('/api/sd/list?path=' + encodeURIComponent(path), {}, function(d){
+    if(!d){ tree.innerHTML = '<div style="color:var(--red);padding:12px">Erro ao ler SD</div>'; return; }
     var html = '';
     if(path !== '/'){
       var parent = path.substring(0, path.lastIndexOf('/')) || '/';
       html += '<div class="file-dir" data-path="' + escHtml(parent) + '">← voltar</div>';
     }
+    var i, f;
     if(d.dirs){
-      for(var i=0;i<d.dirs.length;i++){
-        var dir = d.dirs[i];
-        html += '<div class="file-dir" data-path="' + escHtml(dir.path) + '">📁 ' + escHtml(dir.name) + '</div>';
+      for(i=0; i<d.dirs.length; i++){
+        html += '<div class="file-dir" data-path="' + escHtml(d.dirs[i].path) + '">📁 ' + escHtml(d.dirs[i].name) + '</div>';
       }
     }
     if(d.files){
-      for(var j=0;j<d.files.length;j++){
-        var f = d.files[j];
+      for(i=0; i<d.files.length; i++){
+        f = d.files[i];
         html += '<div class="file-entry" data-file="' + escHtml(f.path) + '">' +
           '<span class="file-name">📄 ' + escHtml(f.name) + '</span>' +
           '<span class="file-size">' + formatBytes(f.size) + '</span>' +
-          '<div class="file-actions">' +
-          '<button class="file-btn" data-action="edit">Editar</button>' +
-          '<button class="file-btn del" data-action="del">Del</button>' +
-          '</div></div>';
+          '<div class="file-actions"><button class="file-btn" data-action="edit">Editar</button><button class="file-btn del" data-action="del">Del</button></div></div>';
       }
     }
-    if(!html) html = '<div style="color:var(--muted);padding:12px;font-family:var(--mono);font-size:13px">Pasta vazia.</div>';
-    tree.innerHTML = html;
+    tree.innerHTML = html || '<div style="color:var(--muted);padding:12px">Pasta vazia.</div>';
+
     var dirs = tree.querySelectorAll('.file-dir[data-path]');
-    for(var dIdx = 0; dIdx < dirs.length; dIdx++){
-      dirs[dIdx].onclick = function(){ loadFiles(this.getAttribute('data-path')); };
-    }
+    for(i=0; i<dirs.length; i++) dirs[i].onclick = function(){ loadFiles(this.getAttribute('data-path')); };
+
     var files = tree.querySelectorAll('.file-entry[data-file]');
-    for(var fIdx = 0; fIdx < files.length; fIdx++){
-      files[fIdx].onclick = function(ev){
+    for(i=0; i<files.length; i++){
+      files[i].onclick = function(ev){
         var e = ev || window.event;
         var target = e.target || e.srcElement;
         var pathFile = this.getAttribute('data-file');
         if(target && target.getAttribute('data-action') === 'edit'){
           if(e.stopPropagation) e.stopPropagation();
           editarArquivo(pathFile);
-          return;
-        }
-        if(target && target.getAttribute('data-action') === 'del'){
+        } else if(target && target.getAttribute('data-action') === 'del'){
           if(e.stopPropagation) e.stopPropagation();
-          var nm = this.querySelector('.file-name').textContent.replace('📄', '').trim();
-          confirmar('Deletar ' + nm + '?', function(){ deletarArquivo(pathFile); });
+          confirmar('Deletar arquivo?', function(){ deletarArquivo(pathFile); });
         }
       };
     }
@@ -1302,45 +1302,47 @@ function editarArquivo(path){
   document.getElementById('editorTitle').textContent = path;
   document.getElementById('editorArea').value = 'Carregando...';
   currentFile = path;
-  document.getElementById('editorModal').classList.add('open');
-  api('/api/sd/read?path=' + encodeURIComponent(path)).then(function(d){
+  document.getElementById('editorModal').className = 'modal-overlay open';
+  request('/api/sd/read?path=' + encodeURIComponent(path), {}, function(d){
     document.getElementById('editorArea').value = d ? (d.content || '') : '(erro ao ler arquivo)';
   });
 }
 
 function salvarArquivoEditor(){
   var content = document.getElementById('editorArea').value;
-  api('/api/sd/write', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path: currentFile, content: content})})
-    .then(function(d){ if(d && d.ok){ toast('Arquivo salvo!', 'success'); closeEditor(); } else toast('Erro ao salvar.', 'error'); });
+  request('/api/sd/write', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path: currentFile, content: content})}, function(d){
+    if(d && d.ok){ toast('Arquivo salvo!', 'success'); closeEditor(); }
+    else toast('Erro ao salvar.', 'error');
+  });
 }
 
 function deletarArquivoAtual(){ confirmar('Deletar este arquivo permanentemente?', function(){ closeEditor(); deletarArquivo(currentFile); }); }
 
 function deletarArquivo(path){
-  api('/api/sd/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path:path})})
-    .then(function(d){ if(d && d.ok){ toast('Arquivo deletado.', 'success'); loadFiles(path.substring(0, path.lastIndexOf('/'))||'/'); } else toast('Erro ao deletar.', 'error'); });
+  request('/api/sd/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path:path})}, function(d){
+    if(d && d.ok){ toast('Arquivo deletado.', 'success'); loadFiles(path.substring(0, path.lastIndexOf('/'))||'/'); }
+    else toast('Erro ao deletar.', 'error');
+  });
 }
 
 function criarArquivo(){
-  var path = document.getElementById('newFilePath').value.trim();
+  var path = document.getElementById('newFilePath').value.replace(/^\s+|\s+$/g, '');
   var content = document.getElementById('newFileContent').value;
   if(!path){ toast('Informe o caminho do arquivo.', 'error'); return; }
-  api('/api/sd/write', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path:path, content:content})})
-    .then(function(d){
-      if(d && d.ok){
-        toast('Arquivo criado!', 'success');
-        document.getElementById('newFilePath').value = '';
-        document.getElementById('newFileContent').value = '';
-        var dir = path.substring(0, path.lastIndexOf('/')) || '/';
-        loadFiles(dir);
-      } else toast('Erro ao criar arquivo.', 'error');
-    });
+  request('/api/sd/write', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path:path, content:content})}, function(d){
+    if(d && d.ok){
+      toast('Arquivo criado!', 'success');
+      document.getElementById('newFilePath').value = '';
+      document.getElementById('newFileContent').value = '';
+      loadFiles(path.substring(0, path.lastIndexOf('/')) || '/');
+    } else toast('Erro ao criar arquivo.', 'error');
+  });
 }
 
-function closeEditor(){ document.getElementById('editorModal').classList.remove('open'); }
+function closeEditor(){ document.getElementById('editorModal').className = 'modal-overlay'; }
 
 function loadConfig(){
-  api('/api/config').then(function(d){
+  request('/api/config', {}, function(d){
     if(!d) return;
     document.getElementById('cfgModelo').value = d.modelo || 'gemini-2.5-flash';
     document.getElementById('cfgCidade').value = d.cidade || 'Muriae,BR';
@@ -1352,53 +1354,65 @@ function loadConfig(){
     document.getElementById('cfgNoturnoInicio').value = String(d.noturnoInicio != null ? d.noturnoInicio : 22);
     document.getElementById('cfgNoturnoFim').value = String(d.noturnoFim != null ? d.noturnoFim : 8);
 
-    var c = d.ledColors || {};
-    document.getElementById('ledWifi').value = rgbToHex(c.wifi || {r:0,g:0,b:80});
-    document.getElementById('ledIdle').value = rgbToHex(c.idle || {r:0,g:80,b:255});
-    document.getElementById('ledProcessing').value = rgbToHex(c.processing || {r:255,g:120,b:0});
-    document.getElementById('ledSuccess').value = rgbToHex(c.success || {r:0,g:180,b:0});
-    document.getElementById('ledError').value = rgbToHex(c.error || {r:180,g:0,b:0});
+    preencherCor('ledWifi', 'ledWifiHex', d.ledColors && d.ledColors.wifi, '#000050');
+    preencherCor('ledIdle', 'ledIdleHex', d.ledColors && d.ledColors.idle, '#0050ff');
+    preencherCor('ledProcessing', 'ledProcessingHex', d.ledColors && d.ledColors.processing, '#ff7800');
+    preencherCor('ledSuccess', 'ledSuccessHex', d.ledColors && d.ledColors.success, '#00b400');
+    preencherCor('ledError', 'ledErrorHex', d.ledColors && d.ledColors.error, '#b40000');
   });
 }
 
-function salvarConfig(){
+function salvarConfig(callback){
   var payload = {
     modelo: document.getElementById('cfgModelo').value,
     cidade: document.getElementById('cfgCidade').value,
     noturnoInicio: parseInt(document.getElementById('cfgNoturnoInicio').value, 10),
     noturnoFim: parseInt(document.getElementById('cfgNoturnoFim').value, 10),
     ledColors: {
-      wifi: hexToRgb(document.getElementById('ledWifi').value),
-      idle: hexToRgb(document.getElementById('ledIdle').value),
-      processing: hexToRgb(document.getElementById('ledProcessing').value),
-      success: hexToRgb(document.getElementById('ledSuccess').value),
-      error: hexToRgb(document.getElementById('ledError').value)
+      wifi: hexToRgb(corAtual('ledWifi', 'ledWifiHex')),
+      idle: hexToRgb(corAtual('ledIdle', 'ledIdleHex')),
+      processing: hexToRgb(corAtual('ledProcessing', 'ledProcessingHex')),
+      success: hexToRgb(corAtual('ledSuccess', 'ledSuccessHex')),
+      error: hexToRgb(corAtual('ledError', 'ledErrorHex'))
     }
   };
-  api('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
-    .then(function(d){ if(d && d.ok) toast('Configurações salvas!', 'success'); else toast('Erro ao salvar.', 'error'); });
+  request('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)}, function(d){
+    if(callback) callback(d && d.ok);
+    if(!callback){ if(d && d.ok) toast('Configurações salvas!', 'success'); else toast('Erro ao salvar.', 'error'); }
+  });
+}
+
+function salvarHorarioNoturno(){
+  salvarConfig(function(ok){ toast(ok ? 'Horário noturno salvo!' : 'Erro ao salvar horário.', ok ? 'success' : 'error'); });
+}
+
+function salvarCoresLED(){
+  salvarConfig(function(ok){ toast(ok ? 'Cores do LED salvas!' : 'Erro ao salvar cores.', ok ? 'success' : 'error'); });
 }
 
 function salvarPersonalidade(){
   var texto = document.getElementById('cfgPersonalidade').value;
-  api('/api/personalidade', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({texto:texto})})
-    .then(function(d){ if(d && d.ok) toast('Personalidade salva!', 'success'); else toast('Erro ao salvar.', 'error'); });
+  request('/api/personalidade', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({texto:texto})}, function(d){
+    if(d && d.ok) toast('Personalidade salva!', 'success');
+    else toast('Erro ao salvar.', 'error');
+  });
 }
 
 function toggleFunc(name, enabled){
-  api('/api/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name:name, enabled:enabled})})
-    .then(function(){ toast((enabled ? '✓ ' : '✗ ') + name + ' ' + (enabled ? 'ativado' : 'desativado'), 'info'); });
+  request('/api/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name:name, enabled:enabled})}, function(){
+    toast((enabled ? '✓ ' : '✗ ') + name + ' ' + (enabled ? 'ativado' : 'desativado'), 'info');
+  });
 }
 
-function cmdReset(){ api('/api/cmd/reset', {method:'POST'}); toast('Reiniciando...', 'warn'); }
-function cmdOTA(){ api('/api/cmd/ota', {method:'POST'}).then(function(d){ if(d && d.ok) toast('OTA ativado por 5 min. IP: ' + d.ip, 'success'); else toast('Erro ao ativar OTA.', 'error'); }); }
-function cmdRelatorio(){ toast('Gerando relatório...', 'info'); api('/api/cmd/relatorio', {method:'POST'}).then(function(d){ if(d && d.relatorio){ var box=document.getElementById('relatorioBox'); box.textContent=d.relatorio; box.style.display='block'; toast('Relatório gerado!', 'success'); } else toast('Erro ao gerar.', 'error'); }); }
-function cmdLimparIA(){ api('/api/cmd/limpar-ia', {method:'POST'}).then(function(d){ toast(d&&d.ok?'Histórico IA apagado.':'Erro.', d&&d.ok?'success':'error'); }); }
-function cmdLimparLogs(){ api('/api/cmd/limpar-logs', {method:'POST'}).then(function(d){ toast(d&&d.ok?'Logs apagados.':'Erro.', d&&d.ok?'success':'error'); }); }
-function cmdLimparMem(){ api('/api/cmd/limpar-mem', {method:'POST'}).then(function(d){ toast(d&&d.ok?'Memória apagada.':'Erro.', d&&d.ok?'success':'error'); }); }
+function cmdReset(){ request('/api/cmd/reset', {method:'POST'}, function(){}); toast('Reiniciando...', 'warn'); }
+function cmdOTA(){ request('/api/cmd/ota', {method:'POST'}, function(d){ toast(d && d.ok ? 'OTA ativo. IP: ' + d.ip : 'Erro ao ativar OTA.', d && d.ok ? 'success' : 'error'); }); }
+function cmdRelatorio(){ request('/api/cmd/relatorio', {method:'POST'}, function(d){ var box=document.getElementById('relatorioBox'); if(d && d.relatorio){ box.textContent=d.relatorio; box.style.display='block'; toast('Relatório gerado!', 'success'); } else toast('Erro ao gerar.', 'error'); }); }
+function cmdLimparIA(){ request('/api/cmd/limpar-ia', {method:'POST'}, function(d){ toast(d&&d.ok?'Histórico IA apagado.':'Erro.', d&&d.ok?'success':'error'); }); }
+function cmdLimparLogs(){ request('/api/cmd/limpar-logs', {method:'POST'}, function(d){ toast(d&&d.ok?'Logs apagados.':'Erro.', d&&d.ok?'success':'error'); }); }
+function cmdLimparMem(){ request('/api/cmd/limpar-mem', {method:'POST'}, function(d){ toast(d&&d.ok?'Memória apagada.':'Erro.', d&&d.ok?'success':'error'); }); }
 
 function fetchLog(){
-  api('/api/log').then(function(d){
+  request('/api/log', {}, function(d){
     if(!d || !d.lines) return;
     var lines = [];
     for(var i=0;i<d.lines.length;i++){
@@ -1420,9 +1434,9 @@ function toast(msg, type){
   var wrap = document.getElementById('toast');
   var el = document.createElement('div');
   el.className = 'toast-item ' + type;
-  el.textContent = msg;
+  el.appendChild(document.createTextNode(msg));
   wrap.appendChild(el);
-  setTimeout(function(){ el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 300); }, 3000);
+  setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 3000);
 }
 
 function preencherHoras(){
@@ -1436,19 +1450,54 @@ function preencherHoras(){
   }
 }
 
+function prepararCamposCor(){
+  vincularCor('ledWifi', 'ledWifiHex');
+  vincularCor('ledIdle', 'ledIdleHex');
+  vincularCor('ledProcessing', 'ledProcessingHex');
+  vincularCor('ledSuccess', 'ledSuccessHex');
+  vincularCor('ledError', 'ledErrorHex');
+}
+
+function vincularCor(idColor, idHex){
+  var c = document.getElementById(idColor);
+  var h = document.getElementById(idHex);
+  if(c) c.onchange = function(){ h.value = normalizarHex(c.value); };
+  if(h) h.onkeyup = function(){ var v = normalizarHex(h.value); if(v.length === 7 && c) c.value = v; };
+}
+
+function preencherCor(idColor, idHex, rgb, fallback){
+  var hex = rgb ? rgbToHex(rgb) : fallback;
+  var colorEl = document.getElementById(idColor);
+  colorEl.value = hex;
+  if(colorEl.type !== 'color'){
+    colorEl.style.display = 'none';
+  }
+  document.getElementById(idHex).value = hex;
+}
+
+function corAtual(idColor, idHex){
+  var hex = normalizarHex(document.getElementById(idHex).value || document.getElementById(idColor).value);
+  document.getElementById(idHex).value = hex;
+  document.getElementById(idColor).value = hex;
+  return hex;
+}
+
+function normalizarHex(hex){
+  var h = String(hex || '').replace(/[^0-9a-fA-F]/g, '');
+  if(h.length < 6) h = (h + '000000').substring(0, 6);
+  if(h.length > 6) h = h.substring(0, 6);
+  return '#' + h.toLowerCase();
+}
+
 function hexToRgb(hex){
-  var h = (hex || '#000000').replace('#', '');
+  var h = normalizarHex(hex).replace('#', '');
   return { r: parseInt(h.substring(0,2), 16), g: parseInt(h.substring(2,4), 16), b: parseInt(h.substring(4,6), 16) };
 }
-function rgbToHex(c){
-  return '#' + toHex(c.r || 0) + toHex(c.g || 0) + toHex(c.b || 0);
-}
+function rgbToHex(c){ return '#' + toHex(c.r || 0) + toHex(c.g || 0) + toHex(c.b || 0); }
 function toHex(v){ var s = Number(v).toString(16); return s.length < 2 ? '0' + s : s; }
 function pad2(v){ return v < 10 ? '0' + v : String(v); }
-function num1(v){ v = Number(v || 0); return v.toFixed(1); }
 function formatBytes(b){ if(b<1024) return b+'B'; if(b<1048576) return (b/1024).toFixed(1)+'KB'; return (b/1048576).toFixed(1)+'MB'; }
 function escHtml(s){ s=String(s||''); return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function escJs(s){ return String(s||'').replace(/'/g, "\\\\'"); }
 </script>
 </body>
 </html>

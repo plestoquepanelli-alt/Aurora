@@ -214,6 +214,7 @@ void loop(){
     // Controla exibição da tela web info por 30s
     if(webInfoVisivel && millis() - webInfoTimer > 30000UL){
         webInfoVisivel = false;
+        lastDisplay = 0; // força retorno imediato ao display normal
     }
 
     if(!oledLigado){
@@ -270,7 +271,9 @@ void loop(){
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotao = 0, tExib = 0;
-        if(digitalRead(BTN_AGENDA) == LOW && millis() - tBotao > 500){
+        static bool lastState = HIGH;
+        bool pressed = (digitalRead(BTN_AGENDA) == LOW);
+        if(pressed && lastState && millis() - tBotao > 300){
             tBotao = tExib = millis();
             agendaVisivel  = true;
             webInfoVisivel = false;   // cancela web info se estava ativa
@@ -289,6 +292,7 @@ void loop(){
             }
             exibirAgendaOLED(eventosDia, _diaHoje);
         }
+        lastState = pressed;
         if(agendaVisivel && millis() - tExib > 30000UL)
             agendaVisivel = false;
     }
@@ -298,12 +302,15 @@ void loop(){
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotaoDisp = 0;
-        if(digitalRead(BTN_DISPLAY) == LOW && millis() - tBotaoDisp > 500){
+        static bool lastState = HIGH;
+        bool pressed = (digitalRead(BTN_DISPLAY) == LOW);
+        if(pressed && lastState && millis() - tBotaoDisp > 300){
             tBotaoDisp = millis();
             oledLigado = !oledLigado;
             Serial.printf("[BTN3] OLED %s\n", oledLigado ? "ligado" : "desligado");
             if(oledLigado) lastDisplay = 0;
         }
+        lastState = pressed;
     }
 
     // ════════════════════════════════════════════════════════
@@ -311,11 +318,14 @@ void loop(){
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotaoMenu = 0;
-        if(digitalRead(BTN_MENU) == LOW && millis() - tBotaoMenu > 800){
+        static bool lastState = HIGH;
+        bool pressed = (digitalRead(BTN_MENU) == LOW);
+        if(pressed && lastState && millis() - tBotaoMenu > 400){
             tBotaoMenu = millis();
             Serial.println("[BTN45] Menu principal");
             enviarMenu();
         }
+        lastState = pressed;
     }
 
     // ════════════════════════════════════════════════════════
@@ -326,7 +336,9 @@ void loop(){
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotaoWeb = 0;
-        if(digitalRead(BTN_WEB) == LOW && millis() - tBotaoWeb > 500){
+        static bool lastState = HIGH;
+        bool pressed = (digitalRead(BTN_WEB) == LOW);
+        if(pressed && lastState && millis() - tBotaoWeb > 300){
             tBotaoWeb = millis();
             Serial.println("[BTN46] Web info OLED");
             agendaVisivel  = false;   // cancela agenda se estava ativa
@@ -348,6 +360,7 @@ void loop(){
                 display.display();
             }
         }
+        lastState = pressed;
         // Refresca a tela web info a cada 5s enquanto visível
         // (o IP não muda, mas muda o estado da sessão)
         static unsigned long _lastWebRefresh = 0;
