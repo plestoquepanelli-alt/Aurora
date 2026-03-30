@@ -183,7 +183,7 @@ void loop(){
     bool  _ok      = getLocalTime(&_lt);
     int   _hora    = _ok ? _lt.tm_hour : 12;
     int   _diaHoje = _ok ? _lt.tm_mday : 0;
-    bool  _noturno = (_hora >= 22 || _hora < 8);
+    bool  _noturno = isModoNoturnoAgora();
 
     // ── Serviços periódicos ───────────────────────────────────
     loopOTA();
