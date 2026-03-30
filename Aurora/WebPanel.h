@@ -729,11 +729,11 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
 
   <!-- NAV TABS -->
   <div class="nav">
-    <button class="nav-tab active" onclick="showTab('dashboard')">Dashboard</button>
-    <button class="nav-tab" onclick="showTab('clima')">Clima</button>
-    <button class="nav-tab" onclick="showTab('sdcard')">SD Card</button>
-    <button class="nav-tab" onclick="showTab('config')">Configurações</button>
-    <button class="nav-tab" onclick="showTab('controle')">Controle</button>
+    <button class="nav-tab active" onclick="showTab('dashboard', this)">Dashboard</button>
+    <button class="nav-tab" onclick="showTab('clima', this)">Clima</button>
+    <button class="nav-tab" onclick="showTab('sdcard', this)">SD Card</button>
+    <button class="nav-tab" onclick="showTab('config', this)">Configurações</button>
+    <button class="nav-tab" onclick="showTab('controle', this)">Controle</button>
   </div>
 
   <!-- ═══════════════ DASHBOARD ══════════════════════════ -->
@@ -1093,12 +1093,14 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
 var loggedIn = false;
 var currentFile = '';
 var refreshTimer = null;
+var clockTimer = null;
 
 function request(path, opts, cb){
   opts = opts || {};
   cb = cb || function(){};
   var xhr = new XMLHttpRequest();
   xhr.open(opts.method || 'GET', path, true);
+  xhr.timeout = 12000;
   xhr.setRequestHeader('Accept', 'application/json');
   if(opts.headers){
     for(var k in opts.headers){ if(opts.headers.hasOwnProperty(k)) xhr.setRequestHeader(k, opts.headers[k]); }
@@ -1111,6 +1113,7 @@ function request(path, opts, cb){
     catch(e){ cb(null); }
   };
   xhr.onerror = function(){ cb(null); };
+  xhr.ontimeout = function(){ cb(null); };
   xhr.send(opts.body || null);
 }
 
@@ -1137,6 +1140,7 @@ function doLogout(){
   request('/api/logout', {method:'POST'}, function(){});
   loggedIn = false;
   clearInterval(refreshTimer);
+  clearInterval(clockTimer);
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('loginPin').value = '';
@@ -1151,13 +1155,14 @@ function startApp(){
   loadFiles('/aurora');
   loadConfig();
   refreshTimer = setInterval(function(){ if(loggedIn) refreshDash(); }, 12000);
-  setInterval(function(){
+  clearInterval(clockTimer);
+  clockTimer = setInterval(function(){
     var n = new Date();
     document.getElementById('topTime').textContent = pad2(n.getHours()) + ':' + pad2(n.getMinutes());
   }, 1000);
 }
 
-function showTab(name){
+function showTab(name, btn){
   var i;
   var panels = document.querySelectorAll('.tab-panel');
   for(i=0;i<panels.length;i++) panels[i].style.display = 'none';
@@ -1165,7 +1170,7 @@ function showTab(name){
   for(i=0;i<tabs.length;i++) tabs[i].className = tabs[i].className.replace(' active', '');
   var tab = document.getElementById('tab-' + name);
   if(tab) tab.style.display = 'block';
-  if(window.event && window.event.currentTarget) window.event.currentTarget.className += ' active';
+  if(btn) btn.className += ' active';
   if(name==='clima') loadClima();
   if(name==='sdcard') loadFiles('/aurora');
   if(name==='config') loadConfig();
@@ -1462,7 +1467,11 @@ function vincularCor(idColor, idHex){
 
 function preencherCor(idColor, idHex, rgb, fallback){
   var hex = rgb ? rgbToHex(rgb) : fallback;
-  document.getElementById(idColor).value = hex;
+  var colorEl = document.getElementById(idColor);
+  colorEl.value = hex;
+  if(colorEl.type !== 'color'){
+    colorEl.style.display = 'none';
+  }
   document.getElementById(idHex).value = hex;
 }
 
