@@ -398,6 +398,26 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
   .btn:disabled { opacity: .4; cursor: not-allowed; }
 
   .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .preset-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .preset-btn {
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    padding: 7px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: var(--mono);
+  }
+  .preset-dot{
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+    border: 1px solid rgba(255,255,255,.25);
+    vertical-align: -2px;
+  }
 
   /* ── FORM ROW ─────────────────────────────────────────────── */
   .form-row {
@@ -681,6 +701,19 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
     .weather-grid { grid-template-columns: 1fr; }
     .content { padding: 16px; }
     .topbar { padding: 0 16px; }
+    .login-card { width: 95%; padding: 28px 20px; }
+    .login-title { font-size: 24px; }
+    .login-input { letter-spacing: 4px; }
+  }
+  @media(max-width:900px){
+    .stat-grid { grid-template-columns: 1fr; }
+    .weather-grid { grid-template-columns: 1fr; }
+    .form-row { grid-template-columns: 1fr; }
+    .card { padding: 14px; }
+    .nav-tab { padding: 10px 12px; font-size: 12px; }
+  }
+  @media(max-width:1024px){
+    body::before { display: none; }
   }
   @media(max-width:1024px){
     body::before { display: none; }
@@ -1007,6 +1040,14 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
       <div>
         <div class="form-label">Erro</div>
         <input class="inp" type="color" id="ledError"><input class="inp" id="ledErrorHex" maxlength="7" placeholder="#ff0000">
+      </div>
+      <div class="form-label">Presets rápidos</div>
+      <div class="preset-row">
+        <button class="preset-btn" onclick="aplicarPresetTodos('#0050ff')"><span class="preset-dot" style="background:#0050ff"></span>Azul</button>
+        <button class="preset-btn" onclick="aplicarPresetTodos('#00b400')"><span class="preset-dot" style="background:#00b400"></span>Verde</button>
+        <button class="preset-btn" onclick="aplicarPresetTodos('#b40000')"><span class="preset-dot" style="background:#b40000"></span>Vermelho</button>
+        <button class="preset-btn" onclick="aplicarPresetTodos('#ff7800')"><span class="preset-dot" style="background:#ff7800"></span>Laranja</button>
+        <button class="preset-btn" onclick="aplicarPresetTodos('#7a2fff')"><span class="preset-dot" style="background:#7a2fff"></span>Roxo</button>
       </div>
       <button class="btn btn-primary" onclick="salvarCoresLED()">Salvar Cores do LED</button>
     </div>
@@ -1480,6 +1521,22 @@ function corAtual(idColor, idHex){
   document.getElementById(idHex).value = hex;
   document.getElementById(idColor).value = hex;
   return hex;
+}
+
+function aplicarPresetTodos(hex){
+  setCor('ledWifi', 'ledWifiHex', hex);
+  setCor('ledIdle', 'ledIdleHex', hex);
+  setCor('ledProcessing', 'ledProcessingHex', hex);
+  setCor('ledSuccess', 'ledSuccessHex', hex);
+  setCor('ledError', 'ledErrorHex', hex);
+}
+
+function setCor(idColor, idHex, hex){
+  var v = normalizarHex(hex);
+  var c = document.getElementById(idColor);
+  var h = document.getElementById(idHex);
+  if(c) c.value = v;
+  if(h) h.value = v;
 }
 
 function normalizarHex(hex){

@@ -266,14 +266,28 @@ void loop(){
         }
     }
 
+    // ── Debounce robusto por estado estável (LOW = pressionado) ─
+    auto botaoPressionado = [&](uint8_t pin, bool &stableState, bool &lastRawState, unsigned long &lastChangeMs, unsigned long debounceMs)->bool {
+        bool rawPressed = (digitalRead(pin) == LOW);
+        if(rawPressed != lastRawState){
+            lastRawState = rawPressed;
+            lastChangeMs = millis();
+        }
+        if((millis() - lastChangeMs) >= debounceMs && rawPressed != stableState){
+            stableState = rawPressed;
+            if(stableState) return true; // evento só na borda de descida
+        }
+        return false;
+    };
+
     // ════════════════════════════════════════════════════════
     //  BOTÃO 1 — AGENDA (pino 14)
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotao = 0, tExib = 0;
-        static bool lastState = HIGH;
-        bool pressed = (digitalRead(BTN_AGENDA) == LOW);
-        if(pressed && lastState && millis() - tBotao > 300){
+        static bool stableState = false, lastRawState = false;
+        static unsigned long lastChange = 0;
+        if(botaoPressionado(BTN_AGENDA, stableState, lastRawState, lastChange, 45) && millis() - tBotao > 300){
             tBotao = tExib = millis();
             agendaVisivel  = true;
             webInfoVisivel = false;   // cancela web info se estava ativa
@@ -302,9 +316,9 @@ void loop(){
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotaoDisp = 0;
-        static bool lastState = HIGH;
-        bool pressed = (digitalRead(BTN_DISPLAY) == LOW);
-        if(pressed && lastState && millis() - tBotaoDisp > 300){
+        static bool stableState = false, lastRawState = false;
+        static unsigned long lastChange = 0;
+        if(botaoPressionado(BTN_DISPLAY, stableState, lastRawState, lastChange, 45) && millis() - tBotaoDisp > 300){
             tBotaoDisp = millis();
             oledLigado = !oledLigado;
             Serial.printf("[BTN3] OLED %s\n", oledLigado ? "ligado" : "desligado");
@@ -318,9 +332,9 @@ void loop(){
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotaoMenu = 0;
-        static bool lastState = HIGH;
-        bool pressed = (digitalRead(BTN_MENU) == LOW);
-        if(pressed && lastState && millis() - tBotaoMenu > 400){
+        static bool stableState = false, lastRawState = false;
+        static unsigned long lastChange = 0;
+        if(botaoPressionado(BTN_MENU, stableState, lastRawState, lastChange, 50) && millis() - tBotaoMenu > 400){
             tBotaoMenu = millis();
             Serial.println("[BTN45] Menu principal");
             enviarMenu();
@@ -336,9 +350,9 @@ void loop(){
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotaoWeb = 0;
-        static bool lastState = HIGH;
-        bool pressed = (digitalRead(BTN_WEB) == LOW);
-        if(pressed && lastState && millis() - tBotaoWeb > 300){
+        static bool stableState = false, lastRawState = false;
+        static unsigned long lastChange = 0;
+        if(botaoPressionado(BTN_WEB, stableState, lastRawState, lastChange, 45) && millis() - tBotaoWeb > 300){
             tBotaoWeb = millis();
             Serial.println("[BTN46] Web info OLED");
             agendaVisivel  = false;   // cancela agenda se estava ativa
