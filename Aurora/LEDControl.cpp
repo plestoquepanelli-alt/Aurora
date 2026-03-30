@@ -13,6 +13,11 @@ float faseBranco = 0.0;
 float faseLaranja = 0.0;
 uint8_t blinkStep = 0;
 unsigned long lastBlink = 0;
+LedColor corWiFi       = {0, 0, 80};
+LedColor corIdle       = {0, 80, 255};
+LedColor corProcessing = {255, 120, 0};
+LedColor corSuccess    = {0, 180, 0};
+LedColor corError      = {180, 0, 0};
 
 // ================= IMPLEMENTAÇÕES =================
 void initLED(){
@@ -30,27 +35,24 @@ void ledRespiracaoLaranja(){
   faseLaranja += 0.08;
   if(faseLaranja > TWO_PI) faseLaranja = 0;
   float seno = (sin(faseLaranja) + 1.0) * 0.5;
-  uint8_t brilho = 20 + (seno * 120);
-  setLED(brilho, brilho * 0.5, 0);
+  float fator = 0.15f + (seno * 0.85f);
+  setLED(
+    (uint8_t)(corProcessing.r * fator),
+    (uint8_t)(corProcessing.g * fator),
+    (uint8_t)(corProcessing.b * fator)
+  );
 }
 
 void ledTemperaturaIdle(){
-  float temp = lerTemperatura();
   faseBranco += 0.01;
   if(faseBranco > TWO_PI) faseBranco = 0;
   float seno = (sin(faseBranco) + 1.0) * 0.5;
-  uint8_t brilho = 5 + (seno * 105);
-
-  if(isnan(temp)){ 
-    setLED(0, 0, brilho); 
-    return; 
-  }
-
-  if(temp < 35) setLED(0, 0, brilho);
-  else if(temp < 55) setLED(0, brilho, 0);
-  else if(temp < 70) setLED(brilho, brilho, 0);
-  else if(temp < 80) setLED(brilho, brilho * 0.4, 0);
-  else setLED(brilho, 0, 0);
+  float fator = 0.15f + (seno * 0.85f);
+  setLED(
+    (uint8_t)(corIdle.r * fator),
+    (uint8_t)(corIdle.g * fator),
+    (uint8_t)(corIdle.b * fator)
+  );
 }
 
 void ledPiscandoWiFi(){
@@ -59,7 +61,7 @@ void ledPiscandoWiFi(){
     lastBlink = millis();
     on = !on;
   }
-  if(on) setLED(0, 0, 80);
+  if(on) setLED(corWiFi.r, corWiFi.g, corWiFi.b);
   else setLED(0, 0, 0);
 }
 
@@ -91,8 +93,8 @@ void updateLED(){
     case WIFI_CONNECTING: ledPiscandoWiFi(); break;
     case IDLE: ledTemperaturaIdle(); break;
     case PROCESSING: ledRespiracaoLaranja(); break;
-    case SUCCESS: piscarCor(0, 180, 0); break;
-    case ERROR_STATE: piscarCor(180, 0, 0); break;
+    case SUCCESS: piscarCor(corSuccess.r, corSuccess.g, corSuccess.b); break;
+    case ERROR_STATE: piscarCor(corError.r, corError.g, corError.b); break;
     default: break;
   }
 }
@@ -104,4 +106,24 @@ void esperarComLED(unsigned long tempo){
     delay(1);
     yield();
   }
+}
+
+bool definirCorLED(const String& nome, uint8_t r, uint8_t g, uint8_t b){
+  LedColor cor = {r, g, b};
+  if(nome == "wifi") corWiFi = cor;
+  else if(nome == "idle") corIdle = cor;
+  else if(nome == "processing") corProcessing = cor;
+  else if(nome == "success") corSuccess = cor;
+  else if(nome == "error") corError = cor;
+  else return false;
+  return true;
+}
+
+LedColor obterCorLED(const String& nome){
+  if(nome == "wifi") return corWiFi;
+  if(nome == "idle") return corIdle;
+  if(nome == "processing") return corProcessing;
+  if(nome == "success") return corSuccess;
+  if(nome == "error") return corError;
+  return {0, 0, 0};
 }

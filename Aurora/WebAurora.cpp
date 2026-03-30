@@ -33,7 +33,6 @@ static unsigned long _sessaoInicio = 0;
 static bool _ledDesab      = false;
 static bool _oledDesab     = false;
 static bool _alertasDesab  = false;
-static bool _noturnoDesab  = false;
 
 // ════════════════════════════════════════════════════════════
 //  HELPERS
@@ -289,17 +288,51 @@ static void handleConfigGet(){
   doc["ledDesabilitado"]     = _ledDesab;
   doc["oledDesabilitado"]    = _oledDesab;
   doc["alertasDesabilitados"] = _alertasDesab;
-  doc["noturnoDesabilitado"] = _noturnoDesab;
+  doc["noturnoDesabilitado"] = !modoNoturnoHabilitado;
+  doc["noturnoInicio"]       = modoNoturnoInicioHora;
+  doc["noturnoFim"]          = modoNoturnoFimHora;
+  JsonObject cores = doc.createNestedObject("ledColors");
+  LedColor wifi = obterCorLED("wifi");
+  LedColor idle = obterCorLED("idle");
+  LedColor proc = obterCorLED("processing");
+  LedColor succ = obterCorLED("success");
+  LedColor err  = obterCorLED("error");
+  JsonObject cWifi = cores.createNestedObject("wifi");
+  cWifi["r"] = wifi.r; cWifi["g"] = wifi.g; cWifi["b"] = wifi.b;
+  JsonObject cIdle = cores.createNestedObject("idle");
+  cIdle["r"] = idle.r; cIdle["g"] = idle.g; cIdle["b"] = idle.b;
+  JsonObject cProc = cores.createNestedObject("processing");
+  cProc["r"] = proc.r; cProc["g"] = proc.g; cProc["b"] = proc.b;
+  JsonObject cSucc = cores.createNestedObject("success");
+  cSucc["r"] = succ.r; cSucc["g"] = succ.g; cSucc["b"] = succ.b;
+  JsonObject cErr = cores.createNestedObject("error");
+  cErr["r"] = err.r; cErr["g"] = err.g; cErr["b"] = err.b;
   String out; serializeJson(doc, out);
   sendJSON(out);
 }
 
 static void handleConfigPost(){
   if(!checkAuth()) return;
-  DynamicJsonDocument doc(512);
+  DynamicJsonDocument doc(1024);
   if(!parseBody(doc)){ sendJSON("{\"ok\":false}"); return; }
   if(doc.containsKey("modelo")) modeloAtivo = doc["modelo"].as<String>();
   if(doc.containsKey("cidade")) cidade      = doc["cidade"].as<String>();
+  if(doc.containsKey("noturnoInicio")) modoNoturnoInicioHora = constrain((int)doc["noturnoInicio"], 0, 23);
+  if(doc.containsKey("noturnoFim")) modoNoturnoFimHora       = constrain((int)doc["noturnoFim"], 0, 23);
+  if(doc.containsKey("ledColors")){
+    JsonObject cores = doc["ledColors"].as<JsonObject>();
+    const char* nomes[] = {"wifi", "idle", "processing", "success", "error"};
+    for(int i=0; i<5; i++){
+      if(!cores.containsKey(nomes[i])) continue;
+      JsonObject c = cores[nomes[i]].as<JsonObject>();
+      definirCorLED(
+        nomes[i],
+        constrain((int)(c["r"] | 0), 0, 255),
+        constrain((int)(c["g"] | 0), 0, 255),
+        constrain((int)(c["b"] | 0), 0, 255)
+      );
+    }
+  }
   sendJSON("{\"ok\":true}");
 }
 
@@ -339,7 +372,7 @@ static void handleToggle(){
     if(!enabled){ display.clearDisplay(); display.display(); }
   }
   else if(name == "alertas") _alertasDesab = !enabled;
-  else if(name == "noturno") _noturnoDesab = !enabled;
+  else if(name == "noturno") modoNoturnoHabilitado = enabled;
 
   sendJSON("{\"ok\":true}");
 }
