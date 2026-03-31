@@ -172,8 +172,11 @@ static void enviarRespostaLonga(const String& chat_id, const String& resp){
 //  VERIFICAR RESPOSTA GEMINI
 // ═══════════════════════════════════════════════════════════════
 void verificarRespostaGemini(){
-  if(gJob.state != GJOB_DONE) return;
   if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(100)) != pdTRUE) return;
+  if(gJob.state != GJOB_DONE){
+    xSemaphoreGive(gMutex);
+    return;
+  }
 
   String resp  = gJob.resposta;
   String cid   = gJob.chatId;

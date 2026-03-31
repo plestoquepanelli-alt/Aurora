@@ -123,7 +123,62 @@ static inline bool botaoPressionadoDebounced(
 }
 
 static void taskGemini(void* pv){
+    struct PendingResultado {
+        bool active = false;
+        String pergunta = "";
+        String chatId = "";
+        String resposta = "";
+        unsigned long ts = 0;
+        unsigned long startedAt = 0;
+        uint16_t retries = 0;
+    };
+    static PendingResultado pend;
+
+    auto tentarPublicarResultado = [&](PendingResultado &p) -> bool {
+        if(!p.active) return true;
+        if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(200)) != pdTRUE){
+            p.retries++;
+            return false;
+        }
+
+        bool publicado = false;
+        // Fluxo normal: ainda é o mesmo job em execução.
+        if(gJob.chatId == p.chatId && gJob.state == GJOB_RUNNING){
+            gJob.resposta = p.resposta;
+            gJob.state    = GJOB_DONE;
+            publicado = true;
+        } else {
+            // Fallback: se o estado mudou por concorrência, finaliza o job
+            // usando os dados persistidos localmente para não perder resposta.
+            gJob.pergunta = p.pergunta;
+            gJob.chatId   = p.chatId;
+            gJob.ts       = p.ts;
+            gJob.resposta = p.resposta;
+            gJob.state    = GJOB_DONE;
+            publicado = true;
+            Serial.println("[Core0] Gemini fallback de entrega aplicado");
+        }
+
+        xSemaphoreGive(gMutex);
+        if(publicado){
+            Serial.printf("[Core0] Gemini done %dms (retries=%u)\n",
+                          (int)(millis() - p.ts), p.retries);
+            p = PendingResultado{};
+        }
+        return publicado;
+    };
+
     for(;;){
+        if(pend.active){
+            tentarPublicarResultado(pend);
+            if(pend.active && (millis() - pend.startedAt > 10000UL)){
+                Serial.println("[Core0] Gemini timeout fallback: descartando resultado pendente");
+                pend = PendingResultado{};
+            }
+            vTaskDelay(pdMS_TO_TICKS(30));
+            continue;
+        }
+
         bool hasJob = false;
         String pergunta = "";
         String chatId = "";
@@ -143,14 +198,14 @@ static void taskGemini(void* pv){
         if(hasJob){
             Serial.printf("[Core0] Gemini start heap=%d\n", ESP.getFreeHeap());
             String resp = perguntarGemini(pergunta);
-            if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(2000)) == pdTRUE){
-                if(gJob.chatId == chatId && gJob.state == GJOB_RUNNING){
-                    gJob.resposta = resp;
-                    gJob.state    = GJOB_DONE;
-                }
-                xSemaphoreGive(gMutex);
-                Serial.printf("[Core0] Gemini done %dms\n", (int)(millis()-ts));
-            }
+            pend.active = true;
+            pend.pergunta = pergunta;
+            pend.chatId = chatId;
+            pend.resposta = resp;
+            pend.ts = ts;
+            pend.startedAt = millis();
+            pend.retries = 0;
+            tentarPublicarResultado(pend);
         }
         vTaskDelay(pdMS_TO_TICKS(30));
     }
