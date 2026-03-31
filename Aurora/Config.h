@@ -2,12 +2,12 @@
 #define CONFIG_H
 
 // ================= CREDENCIAIS =================
-#define WIFI_SSID       "imicro_3696-2800"
-#define WIFI_PASSWORD   "Quintadasflores1"
-#define BOT_TOKEN       "8600036831:AAFxt60zTolunCXtjUIgPaiDo-GXc9S9BjQ"
-#define MEU_ID          "5401651820"
-#define GEMINI_API_KEY  "AIzaSyDtIn8VPo1v2FoXbIbfhqI9sdJSo9B_wfw"
-#define WEATHER_API_KEY "bae8fd6f5bd0b6fa4e6d55fb7ea3d9a2"
+#define WIFI_SSID       "NOME-DO-SEU-WIFI" 
+#define WIFI_PASSWORD   "SENHA-DO-SEU-WIFI"
+#define BOT_TOKEN       "SEU-BOT-ID" 
+#define MEU_ID          "SEU-CHAT-ID"
+#define GEMINI_API_KEY  "SUA-CHAVE-GEMINI"
+#define WEATHER_API_KEY "SUA-CHAVE-WEATHER"
 
 // ================= PINOS =================
 #define LED_PIN         48
