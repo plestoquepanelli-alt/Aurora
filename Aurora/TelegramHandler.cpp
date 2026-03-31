@@ -34,14 +34,43 @@ unsigned long lastBotCheck = 0;
 extern UniversalTelegramBot bot;
 static String _estado = "";
 
-// ═══════════════════════════════════════════════════════════════
-//  MODO NOTURNO
-// ═══════════════════════════════════════════════════════════════
-static bool modoNoturnoAtivo(){
-  struct tm t;
-  if(!getLocalTime(&t)) return false;
-  int h = t.tm_hour;
-  return (h >= 22 || h < 8);
+struct EnvioLongoState {
+  bool active = false;
+  String chatId = "";
+  String texto = "";
+  String parseMode = "";
+  int pos = 0;
+  int chunk = 0;
+  unsigned long lastSendAt = 0;
+};
+
+static EnvioLongoState gEnvioLongo;
+
+static bool enfileirarPerguntaGemini(const String& chat_id, const String& pergunta){
+  if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(500)) != pdTRUE){
+    bot.sendMessage(chat_id, "⚠️ Sistema ocupado (mutex). Tente novamente.", "");
+    return false;
+  }
+
+  if(gJob.state != GJOB_IDLE){
+    bool mesmaPergunta = (gJob.chatId == chat_id && gJob.pergunta == pergunta);
+    xSemaphoreGive(gMutex);
+    if(mesmaPergunta){
+      bot.sendMessage(chat_id, "⏳ Essa pergunta já está em processamento. Aguarde a resposta.", "");
+    } else {
+      bot.sendMessage(chat_id, "⏳ Ainda processando outra pergunta...", "");
+    }
+    return false;
+  }
+
+  gJob.jobId++;
+  gJob.pergunta = pergunta;
+  gJob.chatId   = chat_id;
+  gJob.resposta = "";
+  gJob.ts       = millis();
+  gJob.state    = GJOB_PENDING;
+  xSemaphoreGive(gMutex);
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -138,12 +167,22 @@ static String sanitizarMarkdown(const String& s){
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  ENVIAR RESPOSTA LONGA
-//  delay(400) → vTaskDelay(pdMS_TO_TICKS(400)) não bloqueia Core 1
+//  ENVIAR RESPOSTA LONGA (não bloqueante)
+//  Envia 1 chunk por ciclo via bombearEnvioRespostaLonga()
 // ═══════════════════════════════════════════════════════════════
-static void enviarRespostaLonga(const String& chat_id, const String& resp){
+static bool enviarTelegramSeguro(const String& chat_id, const String& texto, const String& parseMode){
+  if(bot.sendMessage(chat_id, texto, parseMode)) return true;
+  // Fallback: se Markdown quebrar, envia texto puro para não "cortar" resposta.
+  return bot.sendMessage(chat_id, texto, "");
+}
+
+static void iniciarEnvioRespostaLonga(const String& chat_id, const String& resp){
   const int LIMITE = 3900;
   String sanitized = sanitizarMarkdown(resp);
+  if((int)sanitized.length() > 12000){
+    // Evita picos de heap e timeouts na API do Telegram.
+    sanitized = sanitized.substring(0, 12000) + "\n\n...[resposta muito longa, truncada localmente]";
+  }
 
   String parseMode = "";
   if(sanitized.indexOf('*') >= 0 || sanitized.indexOf('_') >= 0 ||
@@ -151,30 +190,52 @@ static void enviarRespostaLonga(const String& chat_id, const String& resp){
     parseMode = "Markdown";
   }
 
-  if((int)sanitized.length() <= LIMITE){
-    bot.sendMessage(chat_id, sanitized, parseMode);
+  gEnvioLongo.active = true;
+  gEnvioLongo.chatId = chat_id;
+  gEnvioLongo.texto = sanitized;
+  gEnvioLongo.parseMode = parseMode;
+  gEnvioLongo.pos = 0;
+  gEnvioLongo.chunk = 0;
+  gEnvioLongo.lastSendAt = 0;
+
+  if((int)gEnvioLongo.texto.length() <= LIMITE){
+    enviarTelegramSeguro(gEnvioLongo.chatId, gEnvioLongo.texto, gEnvioLongo.parseMode);
+    gEnvioLongo = EnvioLongoState{};
+  }
+}
+
+static void bombearEnvioRespostaLonga(){
+  if(!gEnvioLongo.active) return;
+  const int LIMITE = 3900;
+  const unsigned long INTERVALO_CHUNK_MS = 120;
+
+  if(millis() - gEnvioLongo.lastSendAt < INTERVALO_CHUNK_MS) return;
+  if(gEnvioLongo.pos >= (int)gEnvioLongo.texto.length()){
+    gEnvioLongo = EnvioLongoState{};
     return;
   }
 
-  int pos = 0, chunk = 0;
-  while(pos < (int)sanitized.length()){
-    int end = min(pos + LIMITE, (int)sanitized.length());
-    if(end < (int)sanitized.length()){
-      int bp = sanitized.lastIndexOf("\n\n", end);
-      if(bp <= pos) bp = sanitized.lastIndexOf('\n', end);
-      if(bp <= pos) bp = sanitized.lastIndexOf(". ", end);
-      if(bp <= pos) bp = sanitized.lastIndexOf(' ', end);
-      if(bp > pos) end = bp + 1;
-    }
-    chunk++;
-    String parte = (chunk > 1 ? "_(continua)_\n" : "") + sanitized.substring(pos, end);
-    bot.sendMessage(chat_id, parte, parseMode);
-    pos = end;
-    if(pos < (int)sanitized.length() && sanitized[pos] == ' ') pos++;
+  int end = min(gEnvioLongo.pos + LIMITE, (int)gEnvioLongo.texto.length());
+  if(end < (int)gEnvioLongo.texto.length()){
+    int bp = gEnvioLongo.texto.lastIndexOf("\n\n", end);
+    if(bp <= gEnvioLongo.pos) bp = gEnvioLongo.texto.lastIndexOf('\n', end);
+    if(bp <= gEnvioLongo.pos) bp = gEnvioLongo.texto.lastIndexOf(". ", end);
+    if(bp <= gEnvioLongo.pos) bp = gEnvioLongo.texto.lastIndexOf(' ', end);
+    if(bp > gEnvioLongo.pos) end = bp + 1;
+  }
 
-    // ← Substituído delay(400) por vTaskDelay — não bloqueia o loop
-    if(pos < (int)sanitized.length())
-      vTaskDelay(pdMS_TO_TICKS(400));
+  gEnvioLongo.chunk++;
+  String parte = (gEnvioLongo.chunk > 1 ? "_(continua)_\n" : "") +
+                 gEnvioLongo.texto.substring(gEnvioLongo.pos, end);
+  enviarTelegramSeguro(gEnvioLongo.chatId, parte, gEnvioLongo.parseMode);
+
+  gEnvioLongo.pos = end;
+  if(gEnvioLongo.pos < (int)gEnvioLongo.texto.length() && gEnvioLongo.texto[gEnvioLongo.pos] == ' ')
+    gEnvioLongo.pos++;
+  gEnvioLongo.lastSendAt = millis();
+
+  if(gEnvioLongo.pos >= (int)gEnvioLongo.texto.length()){
+    gEnvioLongo = EnvioLongoState{};
   }
 }
 
@@ -182,8 +243,13 @@ static void enviarRespostaLonga(const String& chat_id, const String& resp){
 //  VERIFICAR RESPOSTA GEMINI
 // ═══════════════════════════════════════════════════════════════
 void verificarRespostaGemini(){
-  if(gJob.state != GJOB_DONE) return;
+  bombearEnvioRespostaLonga();
+
   if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(100)) != pdTRUE) return;
+  if(gJob.state != GJOB_DONE){
+    xSemaphoreGive(gMutex);
+    return;
+  }
 
   String resp  = gJob.resposta;
   String cid   = gJob.chatId;
@@ -193,7 +259,7 @@ void verificarRespostaGemini(){
   xSemaphoreGive(gMutex);
 
   perguntasFeitas++;
-  enviarRespostaLonga(cid, resp);
+  iniciarEnvioRespostaLonga(cid, resp);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -486,12 +552,12 @@ static void handleText(const String& chat_id, const String& text){
   String textCmd = text;
   textCmd.toLowerCase();
 
-  if(modoNoturnoAtivo()){
+  if(isModoNoturnoAgora()){
     bool isAdmin  = textCmd.startsWith("/admin") || _estado.startsWith("wait_admin");
     bool isStatus = (textCmd == "/status" || textCmd == "/hora");
     if(!isAdmin && !isStatus && _estado.isEmpty()){
       bot.sendMessage(chat_id,
-        "🌙 *Modo noturno* (22h–08h)\n"
+        "🌙 *Modo noturno* (" + faixaModoNoturno() + ")\n"
         "Bot silencioso para economizar recursos.\n"
         "Alertas climáticos continuam ativos.\n"
         "Use /status ou /hora se precisar.", "Markdown");
@@ -504,11 +570,7 @@ static void handleText(const String& chat_id, const String& text){
 
     if(_estado == "wait_ai"){
       _estado = "";
-      if(gJob.state != GJOB_IDLE){ bot.sendMessage(chat_id,"⏳ Ainda processando...",""); return; }
-      if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(500)) == pdTRUE){
-        gJob.pergunta = text; gJob.chatId = chat_id;
-        gJob.ts = millis(); gJob.state = GJOB_PENDING;
-        xSemaphoreGive(gMutex);
+      if(enfileirarPerguntaGemini(chat_id, text)){
         bot.sendChatAction(chat_id,"typing");
         bot.sendMessage(chat_id,"🧠 _Pensando..._","Markdown");
       }
@@ -592,19 +654,15 @@ static void handleText(const String& chat_id, const String& text){
 
   if(!textCmd.startsWith("/")){
     static unsigned long _ultimaRespGemini = 0;
-    if(millis() - _ultimaRespGemini < 5000UL){
+    static String _ultimaPergunta = "";
+    if(millis() - _ultimaRespGemini < 1500UL && textCmd != _ultimaPergunta){
       bot.sendMessage(chat_id,"⏳ Aguarde antes da próxima pergunta.",""); return;
     }
-    if(gJob.state != GJOB_IDLE){
-      bot.sendMessage(chat_id,"⏳ Ainda processando...",""); return;
-    }
     _ultimaRespGemini = millis();
+    _ultimaPergunta = textCmd;
     if(contarPergunta(textCmd) >= 3) salvarMemoria(text,"");
     incrementarPergunta(textCmd);
-    if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(500)) == pdTRUE){
-      gJob.pergunta = text; gJob.chatId = chat_id;
-      gJob.ts = millis(); gJob.state = GJOB_PENDING;
-      xSemaphoreGive(gMutex);
+    if(enfileirarPerguntaGemini(chat_id, text)){
       bot.sendChatAction(chat_id,"typing");
       bot.sendMessage(chat_id,"🧠 _Pensando... Pode usar o sistema normalmente._","Markdown");
     }
