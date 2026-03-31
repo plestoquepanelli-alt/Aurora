@@ -106,6 +106,21 @@ void updateLED(){
   if(millis() - lastLedUpdate < LED_UPDATE_INTERVAL) return;
   lastLedUpdate = millis();
 
+  static SystemState ultimoEstado = BOOT;
+  static unsigned long estadoDesde = 0;
+  if(currentState != ultimoEstado){
+    ultimoEstado = currentState;
+    estadoDesde = millis();
+  }
+
+  // SUCCESS/ERROR devem ser transitórios para não "travar" o LED.
+  if((currentState == SUCCESS || currentState == ERROR_STATE) &&
+     (millis() - estadoDesde > 2500UL)){
+    currentState = IDLE;
+    ultimoEstado = IDLE;
+    estadoDesde = millis();
+  }
+
   switch(currentState){
     case WIFI_CONNECTING: ledPiscandoWiFi(); break;
     case IDLE: ledTemperaturaIdle(); break;

@@ -13,9 +13,19 @@ extern WiFiClientSecure gemini_client;
 
 // ================= IMPLEMENTAÇÕES =================
 String perguntarGemini(const String &pergunta){
-  if(ESP.getFreeHeap() < HEAP_MINIMO){
+  const uint32_t heapLivre = ESP.getFreeHeap();
+  const uint32_t limiarHeap = (ESP.getFreePsram() > 0) ? 18000UL : HEAP_MINIMO;
+  if(heapLivre < limiarHeap){
     currentState = ERROR_STATE;
-    return "Heap baixo.";
+    return "Heap baixo (" + String(heapLivre) + "B).";
+  }
+  if(WiFi.status() != WL_CONNECTED){
+    currentState = ERROR_STATE;
+    return "WiFi desconectado.";
+  }
+  if(String(GEMINI_API_KEY).length() < 20){
+    currentState = ERROR_STATE;
+    return "GEMINI_API_KEY inválida/não configurada.";
   }
   if(WiFi.status() != WL_CONNECTED){
     currentState = ERROR_STATE;
@@ -129,7 +139,15 @@ String perguntarGemini(const String &pergunta){
       String erro = https.getString();
       https.end();
       currentState = ERROR_STATE;
-      return "HTTP " + String(httpCode) + " " + erro;
+      String msg = "HTTP " + String(httpCode);
+      DynamicJsonDocument errDoc(512);
+      if(deserializeJson(errDoc, erro) == DeserializationError::Ok &&
+         errDoc["error"]["message"].is<const char*>()){
+        msg += " " + String((const char*)errDoc["error"]["message"]);
+      } else if(!erro.isEmpty()){
+        msg += " " + erro.substring(0, 120);
+      }
+      return msg;
     }
 
     String payload = https.getString();
