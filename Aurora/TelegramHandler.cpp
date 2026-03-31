@@ -34,14 +34,26 @@ unsigned long lastBotCheck = 0;
 extern UniversalTelegramBot bot;
 static String _estado = "";
 
-// ═══════════════════════════════════════════════════════════════
-//  MODO NOTURNO
-// ═══════════════════════════════════════════════════════════════
-static bool modoNoturnoAtivo(){
-  struct tm t;
-  if(!getLocalTime(&t)) return false;
-  int h = t.tm_hour;
-  return (h >= 22 || h < 8);
+static bool enfileirarPerguntaGemini(const String& chat_id, const String& pergunta){
+  if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(500)) != pdTRUE){
+    bot.sendMessage(chat_id, "⚠️ Sistema ocupado (mutex). Tente novamente.", "");
+    return false;
+  }
+
+  if(gJob.state != GJOB_IDLE){
+    xSemaphoreGive(gMutex);
+    bot.sendMessage(chat_id, "⏳ Ainda processando...", "");
+    return false;
+  }
+
+  gJob.jobId++;
+  gJob.pergunta = pergunta;
+  gJob.chatId   = chat_id;
+  gJob.resposta = "";
+  gJob.ts       = millis();
+  gJob.state    = GJOB_PENDING;
+  xSemaphoreGive(gMutex);
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -182,8 +194,11 @@ static void enviarRespostaLonga(const String& chat_id, const String& resp){
 //  VERIFICAR RESPOSTA GEMINI
 // ═══════════════════════════════════════════════════════════════
 void verificarRespostaGemini(){
-  if(gJob.state != GJOB_DONE) return;
   if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(100)) != pdTRUE) return;
+  if(gJob.state != GJOB_DONE){
+    xSemaphoreGive(gMutex);
+    return;
+  }
 
   String resp  = gJob.resposta;
   String cid   = gJob.chatId;
@@ -486,12 +501,12 @@ static void handleText(const String& chat_id, const String& text){
   String textCmd = text;
   textCmd.toLowerCase();
 
-  if(modoNoturnoAtivo()){
+  if(isModoNoturnoAgora()){
     bool isAdmin  = textCmd.startsWith("/admin") || _estado.startsWith("wait_admin");
     bool isStatus = (textCmd == "/status" || textCmd == "/hora");
     if(!isAdmin && !isStatus && _estado.isEmpty()){
       bot.sendMessage(chat_id,
-        "🌙 *Modo noturno* (22h–08h)\n"
+        "🌙 *Modo noturno* (" + faixaModoNoturno() + ")\n"
         "Bot silencioso para economizar recursos.\n"
         "Alertas climáticos continuam ativos.\n"
         "Use /status ou /hora se precisar.", "Markdown");
@@ -504,11 +519,7 @@ static void handleText(const String& chat_id, const String& text){
 
     if(_estado == "wait_ai"){
       _estado = "";
-      if(gJob.state != GJOB_IDLE){ bot.sendMessage(chat_id,"⏳ Ainda processando...",""); return; }
-      if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(500)) == pdTRUE){
-        gJob.pergunta = text; gJob.chatId = chat_id;
-        gJob.ts = millis(); gJob.state = GJOB_PENDING;
-        xSemaphoreGive(gMutex);
+      if(enfileirarPerguntaGemini(chat_id, text)){
         bot.sendChatAction(chat_id,"typing");
         bot.sendMessage(chat_id,"🧠 _Pensando..._","Markdown");
       }
@@ -595,16 +606,10 @@ static void handleText(const String& chat_id, const String& text){
     if(millis() - _ultimaRespGemini < 5000UL){
       bot.sendMessage(chat_id,"⏳ Aguarde antes da próxima pergunta.",""); return;
     }
-    if(gJob.state != GJOB_IDLE){
-      bot.sendMessage(chat_id,"⏳ Ainda processando...",""); return;
-    }
     _ultimaRespGemini = millis();
     if(contarPergunta(textCmd) >= 3) salvarMemoria(text,"");
     incrementarPergunta(textCmd);
-    if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(500)) == pdTRUE){
-      gJob.pergunta = text; gJob.chatId = chat_id;
-      gJob.ts = millis(); gJob.state = GJOB_PENDING;
-      xSemaphoreGive(gMutex);
+    if(enfileirarPerguntaGemini(chat_id, text)){
       bot.sendChatAction(chat_id,"typing");
       bot.sendMessage(chat_id,"🧠 _Pensando... Pode usar o sistema normalmente._","Markdown");
     }
