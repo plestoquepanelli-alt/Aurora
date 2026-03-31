@@ -35,16 +35,6 @@ extern UniversalTelegramBot bot;
 static String _estado = "";
 
 // ═══════════════════════════════════════════════════════════════
-//  MODO NOTURNO
-// ═══════════════════════════════════════════════════════════════
-static bool modoNoturnoAtivo(){
-  struct tm t;
-  if(!getLocalTime(&t)) return false;
-  int h = t.tm_hour;
-  return (h >= 22 || h < 8);
-}
-
-// ═══════════════════════════════════════════════════════════════
 //  SANITIZAR MARKDOWN — O(n) scan, sem loops de replace aninhados
 //
 //  Versão anterior usava while(indexOf("**")>=0) com substring()
@@ -182,8 +172,11 @@ static void enviarRespostaLonga(const String& chat_id, const String& resp){
 //  VERIFICAR RESPOSTA GEMINI
 // ═══════════════════════════════════════════════════════════════
 void verificarRespostaGemini(){
-  if(gJob.state != GJOB_DONE) return;
   if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(100)) != pdTRUE) return;
+  if(gJob.state != GJOB_DONE){
+    xSemaphoreGive(gMutex);
+    return;
+  }
 
   String resp  = gJob.resposta;
   String cid   = gJob.chatId;
@@ -486,12 +479,12 @@ static void handleText(const String& chat_id, const String& text){
   String textCmd = text;
   textCmd.toLowerCase();
 
-  if(modoNoturnoAtivo()){
+  if(isModoNoturnoAgora()){
     bool isAdmin  = textCmd.startsWith("/admin") || _estado.startsWith("wait_admin");
     bool isStatus = (textCmd == "/status" || textCmd == "/hora");
     if(!isAdmin && !isStatus && _estado.isEmpty()){
       bot.sendMessage(chat_id,
-        "🌙 *Modo noturno* (22h–08h)\n"
+        "🌙 *Modo noturno* (" + faixaModoNoturno() + ")\n"
         "Bot silencioso para economizar recursos.\n"
         "Alertas climáticos continuam ativos.\n"
         "Use /status ou /hora se precisar.", "Markdown");
