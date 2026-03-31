@@ -34,6 +34,28 @@ unsigned long lastBotCheck = 0;
 extern UniversalTelegramBot bot;
 static String _estado = "";
 
+static bool enfileirarPerguntaGemini(const String& chat_id, const String& pergunta){
+  if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(500)) != pdTRUE){
+    bot.sendMessage(chat_id, "⚠️ Sistema ocupado (mutex). Tente novamente.", "");
+    return false;
+  }
+
+  if(gJob.state != GJOB_IDLE){
+    xSemaphoreGive(gMutex);
+    bot.sendMessage(chat_id, "⏳ Ainda processando...", "");
+    return false;
+  }
+
+  gJob.jobId++;
+  gJob.pergunta = pergunta;
+  gJob.chatId   = chat_id;
+  gJob.resposta = "";
+  gJob.ts       = millis();
+  gJob.state    = GJOB_PENDING;
+  xSemaphoreGive(gMutex);
+  return true;
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  SANITIZAR MARKDOWN — O(n) scan, sem loops de replace aninhados
 //
@@ -497,11 +519,7 @@ static void handleText(const String& chat_id, const String& text){
 
     if(_estado == "wait_ai"){
       _estado = "";
-      if(gJob.state != GJOB_IDLE){ bot.sendMessage(chat_id,"⏳ Ainda processando...",""); return; }
-      if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(500)) == pdTRUE){
-        gJob.pergunta = text; gJob.chatId = chat_id;
-        gJob.ts = millis(); gJob.state = GJOB_PENDING;
-        xSemaphoreGive(gMutex);
+      if(enfileirarPerguntaGemini(chat_id, text)){
         bot.sendChatAction(chat_id,"typing");
         bot.sendMessage(chat_id,"🧠 _Pensando..._","Markdown");
       }
@@ -588,16 +606,10 @@ static void handleText(const String& chat_id, const String& text){
     if(millis() - _ultimaRespGemini < 5000UL){
       bot.sendMessage(chat_id,"⏳ Aguarde antes da próxima pergunta.",""); return;
     }
-    if(gJob.state != GJOB_IDLE){
-      bot.sendMessage(chat_id,"⏳ Ainda processando...",""); return;
-    }
     _ultimaRespGemini = millis();
     if(contarPergunta(textCmd) >= 3) salvarMemoria(text,"");
     incrementarPergunta(textCmd);
-    if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(500)) == pdTRUE){
-      gJob.pergunta = text; gJob.chatId = chat_id;
-      gJob.ts = millis(); gJob.state = GJOB_PENDING;
-      xSemaphoreGive(gMutex);
+    if(enfileirarPerguntaGemini(chat_id, text)){
       bot.sendChatAction(chat_id,"typing");
       bot.sendMessage(chat_id,"🧠 _Pensando... Pode usar o sistema normalmente._","Markdown");
     }

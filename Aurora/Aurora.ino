@@ -125,7 +125,7 @@ static inline bool botaoPressionadoDebounced(
 static void taskGemini(void* pv){
     struct PendingResultado {
         bool active = false;
-        String pergunta = "";
+        uint32_t jobId = 0;
         String chatId = "";
         String resposta = "";
         unsigned long ts = 0;
@@ -143,20 +143,16 @@ static void taskGemini(void* pv){
 
         bool publicado = false;
         // Fluxo normal: ainda é o mesmo job em execução.
-        if(gJob.chatId == p.chatId && gJob.state == GJOB_RUNNING){
+        if(gJob.jobId == p.jobId && gJob.chatId == p.chatId && gJob.state == GJOB_RUNNING){
             gJob.resposta = p.resposta;
             gJob.state    = GJOB_DONE;
             publicado = true;
         } else {
-            // Fallback: se o estado mudou por concorrência, finaliza o job
-            // usando os dados persistidos localmente para não perder resposta.
-            gJob.pergunta = p.pergunta;
-            gJob.chatId   = p.chatId;
-            gJob.ts       = p.ts;
-            gJob.resposta = p.resposta;
-            gJob.state    = GJOB_DONE;
-            publicado = true;
-            Serial.println("[Core0] Gemini fallback de entrega aplicado");
+            // Segurança: se o job já mudou, nunca sobrescreve o job atual.
+            // Isso evita entregar resposta antiga no chat errado.
+            Serial.printf("[Core0] Gemini resultado descartado (job mudou). esperado=%lu atual=%lu\n",
+                          (unsigned long)p.jobId, (unsigned long)gJob.jobId);
+            publicado = true; // consome pendente para não travar pipeline
         }
 
         xSemaphoreGive(gMutex);
@@ -183,6 +179,7 @@ static void taskGemini(void* pv){
         String pergunta = "";
         String chatId = "";
         unsigned long ts = 0;
+        uint32_t jobId = 0;
 
         if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(100)) == pdTRUE){
             if(gJob.state == GJOB_PENDING){
@@ -190,6 +187,7 @@ static void taskGemini(void* pv){
                 pergunta = gJob.pergunta;
                 chatId   = gJob.chatId;
                 ts       = gJob.ts;
+                jobId    = gJob.jobId;
                 hasJob   = true;
             }
             xSemaphoreGive(gMutex);
@@ -199,7 +197,7 @@ static void taskGemini(void* pv){
             Serial.printf("[Core0] Gemini start heap=%d\n", ESP.getFreeHeap());
             String resp = perguntarGemini(pergunta);
             pend.active = true;
-            pend.pergunta = pergunta;
+            pend.jobId = jobId;
             pend.chatId = chatId;
             pend.resposta = resp;
             pend.ts = ts;
