@@ -98,20 +98,114 @@ UniversalTelegramBot bot(BOT_TOKEN, secured_client);
 GeminiJob          gJob;
 SemaphoreHandle_t  gMutex;
 
+static inline bool botaoPressionadoDebounced(
+    uint8_t pin,
+    bool &stableState,
+    bool &lastRawState,
+    unsigned long &lastChangeMs,
+    unsigned long debounceMs){
+    bool rawPressed = (digitalRead(pin) == LOW);
+    if(lastChangeMs == 0){
+        stableState = rawPressed;
+        lastRawState = rawPressed;
+        lastChangeMs = millis();
+        return false;
+    }
+    if(rawPressed != lastRawState){
+        lastRawState = rawPressed;
+        lastChangeMs = millis();
+    }
+    if((millis() - lastChangeMs) >= debounceMs && rawPressed != stableState){
+        stableState = rawPressed;
+        if(stableState) return true;
+    }
+    return false;
+}
+
 static void taskGemini(void* pv){
-    for(;;){
-        if(gJob.state == GJOB_PENDING){
-            gJob.state = GJOB_RUNNING;
-            Serial.printf("[Core0] Gemini start heap=%d\n", ESP.getFreeHeap());
-            String resp = perguntarGemini(gJob.pergunta);
-            if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(2000)) == pdTRUE){
-                gJob.resposta = resp;
-                gJob.state    = GJOB_DONE;
-                xSemaphoreGive(gMutex);
-                Serial.printf("[Core0] Gemini done %dms\n", (int)(millis()-gJob.ts));
-            }
+    struct PendingResultado {
+        bool active = false;
+        uint32_t jobId = 0;
+        String chatId = "";
+        String resposta = "";
+        unsigned long ts = 0;
+        unsigned long startedAt = 0;
+        uint16_t retries = 0;
+    };
+    static PendingResultado pend;
+
+    auto tentarPublicarResultado = [&](PendingResultado &p) -> bool {
+        if(!p.active) return true;
+        if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(200)) != pdTRUE){
+            p.retries++;
+            return false;
         }
-        vTaskDelay(pdMS_TO_TICKS(50));
+
+        bool publicado = false;
+        // Fluxo normal: ainda é o mesmo job em execução.
+        if(gJob.jobId == p.jobId && gJob.chatId == p.chatId && gJob.state == GJOB_RUNNING){
+            gJob.resposta = p.resposta;
+            gJob.state    = GJOB_DONE;
+            publicado = true;
+        } else {
+            // Segurança: se o job já mudou, nunca sobrescreve o job atual.
+            // Isso evita entregar resposta antiga no chat errado.
+            Serial.printf("[Core0] Gemini resultado descartado (job mudou). esperado=%lu atual=%lu\n",
+                          (unsigned long)p.jobId, (unsigned long)gJob.jobId);
+            publicado = true; // consome pendente para não travar pipeline
+        }
+
+        xSemaphoreGive(gMutex);
+        if(publicado){
+            Serial.printf("[Core0] Gemini done %dms (retries=%u)\n",
+                          (int)(millis() - p.ts), p.retries);
+            p = PendingResultado{};
+        }
+        return publicado;
+    };
+
+    for(;;){
+        if(pend.active){
+            tentarPublicarResultado(pend);
+            if(pend.active && (millis() - pend.startedAt > 10000UL)){
+                Serial.println("[Core0] Gemini timeout fallback: descartando resultado pendente");
+                pend = PendingResultado{};
+            }
+            vTaskDelay(pdMS_TO_TICKS(30));
+            continue;
+        }
+
+        bool hasJob = false;
+        String pergunta = "";
+        String chatId = "";
+        unsigned long ts = 0;
+        uint32_t jobId = 0;
+
+        if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(100)) == pdTRUE){
+            if(gJob.state == GJOB_PENDING){
+                gJob.state = GJOB_RUNNING;
+                pergunta = gJob.pergunta;
+                chatId   = gJob.chatId;
+                ts       = gJob.ts;
+                jobId    = gJob.jobId;
+                hasJob   = true;
+            }
+            xSemaphoreGive(gMutex);
+        }
+
+        if(hasJob){
+            Serial.printf("[Core0] Gemini start heap=%d\n", ESP.getFreeHeap());
+            String resp = perguntarGemini(pergunta);
+            pend.active = true;
+            pend.jobId = jobId;
+            pend.chatId = chatId;
+            pend.resposta = resp;
+            pend.ts = ts;
+            pend.startedAt = millis();
+            pend.retries = 0;
+            tentarPublicarResultado(pend);
+        }
+        vTaskDelay(pdMS_TO_TICKS(30));
     }
 }
 
@@ -183,7 +277,7 @@ void loop(){
     bool  _ok      = getLocalTime(&_lt);
     int   _hora    = _ok ? _lt.tm_hour : 12;
     int   _diaHoje = _ok ? _lt.tm_mday : 0;
-    bool  _noturno = (_hora >= 22 || _hora < 8);
+    bool  _noturno = isModoNoturnoAgora();
 
     // ── Serviços periódicos ───────────────────────────────────
     loopOTA();
@@ -214,6 +308,7 @@ void loop(){
     // Controla exibição da tela web info por 30s
     if(webInfoVisivel && millis() - webInfoTimer > 30000UL){
         webInfoVisivel = false;
+        lastDisplay = 0; // força retorno imediato ao display normal
     }
 
     if(!oledLigado){
@@ -270,7 +365,9 @@ void loop(){
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotao = 0, tExib = 0;
-        if(digitalRead(BTN_AGENDA) == LOW && millis() - tBotao > 500){
+        static bool stableState = false, lastRawState = false;
+        static unsigned long lastChange = 0;
+        if(botaoPressionadoDebounced(BTN_AGENDA, stableState, lastRawState, lastChange, 45) && millis() - tBotao > 300){
             tBotao = tExib = millis();
             agendaVisivel  = true;
             webInfoVisivel = false;   // cancela web info se estava ativa
@@ -298,7 +395,9 @@ void loop(){
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotaoDisp = 0;
-        if(digitalRead(BTN_DISPLAY) == LOW && millis() - tBotaoDisp > 500){
+        static bool stableState = false, lastRawState = false;
+        static unsigned long lastChange = 0;
+        if(botaoPressionadoDebounced(BTN_DISPLAY, stableState, lastRawState, lastChange, 45) && millis() - tBotaoDisp > 300){
             tBotaoDisp = millis();
             oledLigado = !oledLigado;
             Serial.printf("[BTN3] OLED %s\n", oledLigado ? "ligado" : "desligado");
@@ -311,7 +410,9 @@ void loop(){
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotaoMenu = 0;
-        if(digitalRead(BTN_MENU) == LOW && millis() - tBotaoMenu > 800){
+        static bool stableState = false, lastRawState = false;
+        static unsigned long lastChange = 0;
+        if(botaoPressionadoDebounced(BTN_MENU, stableState, lastRawState, lastChange, 50) && millis() - tBotaoMenu > 400){
             tBotaoMenu = millis();
             Serial.println("[BTN45] Menu principal");
             enviarMenu();
@@ -326,7 +427,9 @@ void loop(){
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotaoWeb = 0;
-        if(digitalRead(BTN_WEB) == LOW && millis() - tBotaoWeb > 500){
+        static bool stableState = false, lastRawState = false;
+        static unsigned long lastChange = 0;
+        if(botaoPressionadoDebounced(BTN_WEB, stableState, lastRawState, lastChange, 45) && millis() - tBotaoWeb > 300){
             tBotaoWeb = millis();
             Serial.println("[BTN46] Web info OLED");
             agendaVisivel  = false;   // cancela agenda se estava ativa

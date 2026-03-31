@@ -9,6 +9,9 @@
 // ================= VARIÁVEIS =================
 temperature_sensor_handle_t temp_handle = NULL;
 unsigned long lastWiFiAttempt = 0;
+bool modoNoturnoHabilitado = true;
+uint8_t modoNoturnoInicioHora = 22;
+uint8_t modoNoturnoFimHora = 8;
 
 // OTA
 static bool          _otaAtivo    = false;
@@ -196,4 +199,22 @@ void loopOTA(){
 
 bool otaAtivo(){
   return _otaAtivo;
+}
+
+bool isModoNoturnoAgora(){
+  if(!modoNoturnoHabilitado) return false;
+  struct tm t;
+  if(!getLocalTime(&t)) return false;
+  int h = t.tm_hour;
+  if(modoNoturnoInicioHora == modoNoturnoFimHora) return true;
+  if(modoNoturnoInicioHora > modoNoturnoFimHora){
+    return (h >= modoNoturnoInicioHora || h < modoNoturnoFimHora);
+  }
+  return (h >= modoNoturnoInicioHora && h < modoNoturnoFimHora);
+}
+
+String faixaModoNoturno(){
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%02uh–%02uh", modoNoturnoInicioHora, modoNoturnoFimHora);
+  return String(buf);
 }
