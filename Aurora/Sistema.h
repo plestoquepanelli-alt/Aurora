@@ -23,6 +23,11 @@ float lerTemperatura();
 void enviarMenu();
 bool isModoNoturnoAgora();
 String faixaModoNoturno();
+void iniciarModoConfigAP();
+void pararModoConfigAP();
+bool apConfigAtivo();
+String nomeAPConfig();
+bool conectarWiFiComCredenciais(const String& ssid, const String& senha, unsigned long timeoutMs = 20000UL);
 
 // ================= OTA =================
 void ativarOTA();          

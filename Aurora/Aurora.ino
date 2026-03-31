@@ -450,15 +450,43 @@ void loop(){
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotaoWeb = 0;
+        static unsigned long ultimoCliqueWeb = 0;
         static bool stableState = false, lastRawState = false;
         static unsigned long lastChange = 0;
         if(botaoPressionadoDebounced(BTN_WEB, stableState, lastRawState, lastChange, 45) && millis() - tBotaoWeb > 300){
             tBotaoWeb = millis();
-            Serial.println("[BTN46] Web info OLED");
+            bool duploClique = (ultimoCliqueWeb > 0 && (millis() - ultimoCliqueWeb) <= 1200UL);
+            ultimoCliqueWeb = millis();
+            if(duploClique){
+                if(!apConfigAtivo()){
+                    iniciarModoConfigAP();
+                    Serial.println("[BTN46] Duplo clique: AP de configuração ativado");
+                } else {
+                    pararModoConfigAP();
+                    Serial.println("[BTN46] Duplo clique: AP de configuração desativado");
+                }
+            } else {
+                Serial.println("[BTN46] Web info OLED");
+            }
             agendaVisivel  = false;   // cancela agenda se estava ativa
             webInfoVisivel = true;
             webInfoTimer   = millis();
-            if(WiFi.status() == WL_CONNECTED){
+            if(apConfigAtivo()){
+                display.clearDisplay();
+                display.fillRect(0, 0, 128, 12, SH110X_WHITE);
+                display.setTextColor(SH110X_BLACK);
+                display.setCursor(14, 2);
+                display.setTextSize(1);
+                display.print("WIFI CONFIG AP");
+                display.setTextColor(SH110X_WHITE);
+                display.setCursor(2, 18);
+                display.print(nomeAPConfig());
+                display.setCursor(2, 30);
+                display.print("Senha: aurora123");
+                display.setCursor(2, 42);
+                display.print("http://192.168.4.1");
+                display.display();
+            } else if(WiFi.status() == WL_CONNECTED){
                 exibirAcessoWebOLED();
             } else {
                 // Mostra aviso de offline
@@ -480,7 +508,22 @@ void loop(){
         static unsigned long _lastWebRefresh = 0;
         if(webInfoVisivel && millis() - _lastWebRefresh > 5000){
             _lastWebRefresh = millis();
-            if(WiFi.status() == WL_CONNECTED) exibirAcessoWebOLED();
+            if(apConfigAtivo()){
+                display.clearDisplay();
+                display.fillRect(0, 0, 128, 12, SH110X_WHITE);
+                display.setTextColor(SH110X_BLACK);
+                display.setCursor(14, 2);
+                display.setTextSize(1);
+                display.print("WIFI CONFIG AP");
+                display.setTextColor(SH110X_WHITE);
+                display.setCursor(2, 18);
+                display.print(nomeAPConfig());
+                display.setCursor(2, 30);
+                display.print("Senha: aurora123");
+                display.setCursor(2, 42);
+                display.print("http://192.168.4.1");
+                display.display();
+            } else if(WiFi.status() == WL_CONNECTED) exibirAcessoWebOLED();
         }
     }
 

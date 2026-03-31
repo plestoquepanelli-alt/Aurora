@@ -12,6 +12,8 @@ unsigned long lastWiFiAttempt = 0;
 bool modoNoturnoHabilitado = true;
 uint8_t modoNoturnoInicioHora = 22;
 uint8_t modoNoturnoFimHora = 8;
+static bool _apConfigAtivo = false;
+static String _apNome = "Aurora-Setup";
 
 // OTA
 static bool          _otaAtivo    = false;
@@ -217,4 +219,49 @@ String faixaModoNoturno(){
   char buf[16];
   snprintf(buf, sizeof(buf), "%02uh–%02uh", modoNoturnoInicioHora, modoNoturnoFimHora);
   return String(buf);
+}
+
+void iniciarModoConfigAP(){
+  if(_apConfigAtivo) return;
+  uint32_t sufixo = (uint32_t)(ESP.getEfuseMac() & 0xFFFF);
+  char nome[32];
+  snprintf(nome, sizeof(nome), "Aurora-Setup-%04X", (unsigned int)sufixo);
+  _apNome = String(nome);
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAP(_apNome.c_str(), "aurora123");
+  _apConfigAtivo = true;
+  Serial.println("[WiFi] AP config ativo: " + _apNome + " / 192.168.4.1");
+}
+
+void pararModoConfigAP(){
+  if(!_apConfigAtivo) return;
+  WiFi.softAPdisconnect(true);
+  _apConfigAtivo = false;
+  WiFi.mode(WIFI_STA);
+  Serial.println("[WiFi] AP config desativado.");
+}
+
+bool apConfigAtivo(){
+  return _apConfigAtivo;
+}
+
+String nomeAPConfig(){
+  return _apNome;
+}
+
+bool conectarWiFiComCredenciais(const String& ssid, const String& senha, unsigned long timeoutMs){
+  if(ssid.isEmpty()) return false;
+  WiFi.mode(_apConfigAtivo ? WIFI_AP_STA : WIFI_STA);
+  WiFi.begin(ssid.c_str(), senha.c_str());
+  unsigned long ini = millis();
+  while(millis() - ini < timeoutMs){
+    if(WiFi.status() == WL_CONNECTED){
+      Serial.println("[WiFi] Conectado com nova rede: " + ssid);
+      return true;
+    }
+    delay(120);
+    yield();
+  }
+  Serial.println("[WiFi] Falha ao conectar em: " + ssid);
+  return WiFi.status() == WL_CONNECTED;
 }

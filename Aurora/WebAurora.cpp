@@ -291,6 +291,8 @@ static void handleConfigGet(){
   doc["noturnoDesabilitado"] = !modoNoturnoHabilitado;
   doc["noturnoInicio"]       = modoNoturnoInicioHora;
   doc["noturnoFim"]          = modoNoturnoFimHora;
+  doc["apConfigAtivo"]       = apConfigAtivo();
+  doc["apConfigNome"]        = nomeAPConfig();
   JsonObject cores = doc.createNestedObject("ledColors");
   LedColor wifi = obterCorLED("wifi");
   LedColor idle = obterCorLED("idle");
@@ -348,6 +350,54 @@ static void handleConfigPost(){
     }
   }
   sendJSON("{\"ok\":true}");
+}
+
+static void handleWiFiState(){
+  if(!checkAuth()) return;
+  DynamicJsonDocument doc(384);
+  doc["apConfigAtivo"] = apConfigAtivo();
+  doc["apConfigNome"] = nomeAPConfig();
+  doc["apIP"] = apConfigAtivo() ? WiFi.softAPIP().toString() : "";
+  doc["staConnected"] = (WiFi.status() == WL_CONNECTED);
+  doc["staSSID"] = WiFi.SSID();
+  doc["staIP"] = (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : "";
+  String out; serializeJson(doc, out);
+  sendJSON(out);
+}
+
+static void handleWiFiScan(){
+  if(!checkAuth()) return;
+  int n = WiFi.scanNetworks(false, true);
+  DynamicJsonDocument doc(3072);
+  JsonArray redes = doc.createNestedArray("redes");
+  for(int i = 0; i < n && i < 25; i++){
+    String s = WiFi.SSID(i);
+    if(s.isEmpty()) continue;
+    JsonObject r = redes.createNestedObject();
+    r["ssid"] = s;
+    r["rssi"] = WiFi.RSSI(i);
+    r["open"] = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN);
+  }
+  WiFi.scanDelete();
+  doc["ok"] = true;
+  String out; serializeJson(doc, out);
+  sendJSON(out);
+}
+
+static void handleWiFiConnect(){
+  if(!checkAuth()) return;
+  DynamicJsonDocument doc(384);
+  if(!parseBody(doc)){ sendJSON("{\"ok\":false,\"err\":\"bad_json\"}"); return; }
+  String ssid = doc["ssid"] | "";
+  String senha = doc["senha"] | "";
+  if(ssid.isEmpty()){ sendJSON("{\"ok\":false,\"err\":\"ssid_required\"}"); return; }
+  bool ok = conectarWiFiComCredenciais(ssid, senha, 20000UL);
+  DynamicJsonDocument outDoc(256);
+  outDoc["ok"] = ok;
+  outDoc["ssid"] = ssid;
+  outDoc["ip"] = ok ? WiFi.localIP().toString() : "";
+  String out; serializeJson(outDoc, out);
+  sendJSON(out, ok ? 200 : 400);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -532,6 +582,9 @@ void initWebServer(){
   // Config
   server.on("/api/config", HTTP_GET,  handleConfigGet);
   server.on("/api/config", HTTP_POST, handleConfigPost);
+  server.on("/api/wifi/state", HTTP_GET, handleWiFiState);
+  server.on("/api/wifi/scan", HTTP_GET, handleWiFiScan);
+  server.on("/api/wifi/connect", HTTP_POST, handleWiFiConnect);
   server.on("/api/personalidade", HTTP_POST, handlePersonalidade);
   server.on("/api/toggle",        HTTP_POST, handleToggle);
 

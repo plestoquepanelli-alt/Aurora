@@ -58,6 +58,7 @@ String perguntarGemini(const String &pergunta){
 
     // ── Monta data/hora atual via NTP ──────────────────────────
     String dataHoraAtual = "";
+    String dataHoraISO = "";
     {
       struct tm timeinfo;
       if(getLocalTime(&timeinfo)){
@@ -65,6 +66,9 @@ String perguntarGemini(const String &pergunta){
         strftime(buf, sizeof(buf),
           "Hoje é %d/%m/%Y. São %H:%M (horário de Brasília).", &timeinfo);
         dataHoraAtual = String(buf);
+        char iso[40];
+        strftime(iso, sizeof(iso), "%Y-%m-%d %H:%M:%S -03:00", &timeinfo);
+        dataHoraISO = String(iso);
       }
     }
 
@@ -111,7 +115,13 @@ String perguntarGemini(const String &pergunta){
     // ── Mensagem atual ────────────────────────────────────────
     JsonObject item = contents.createNestedObject();
     item["role"] = "user";
-    item["parts"][0]["text"] = pergunta;
+    String perguntaComTempo = pergunta;
+    if(!dataHoraISO.isEmpty()){
+      perguntaComTempo += "\n\n[Contexto temporal obrigatório: agora = ";
+      perguntaComTempo += dataHoraISO;
+      perguntaComTempo += ". Use esta referência para respostas sobre notícias/data.]";
+    }
+    item["parts"][0]["text"] = perguntaComTempo;
 
     String body;
     body.reserve(2400);

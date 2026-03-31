@@ -754,6 +754,7 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
     <div class="topbar-brand">AURORA <span>· ESP32-S3</span></div>
     <div class="status-dot" id="connDot" title="Conexão"></div>
     <div class="topbar-time" id="topTime">--:--</div>
+    <button class="logout-btn" id="perfBtn" onclick="toggleModoLeve()">Modo Leve: ON</button>
     <button class="logout-btn" onclick="doLogout()">Sair</button>
   </div>
 
@@ -1030,6 +1031,29 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
       <button class="btn btn-primary" onclick="salvarCoresLED()">Salvar Cores do LED</button>
     </div>
 
+    <div class="card">
+      <div class="card-title">Wi-Fi (AP por duplo clique no botão WEB)</div>
+      <div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:10px" id="wifiStateInfo">Carregando estado de rede...</div>
+      <div class="btn-row" style="margin-bottom:10px">
+        <button class="btn btn-secondary btn-sm" onclick="scanWiFi()">Escanear redes</button>
+      </div>
+      <div class="form-row">
+        <div>
+          <div class="form-label">Rede disponível</div>
+          <select class="inp" id="wifiScanList"><option value="">-- selecione --</option></select>
+        </div>
+        <div>
+          <div class="form-label">Ou SSID manual</div>
+          <input class="inp" id="wifiSsid" placeholder="Nome da rede">
+        </div>
+      </div>
+      <div>
+        <div class="form-label">Senha</div>
+        <input class="inp" id="wifiPass" type="password" placeholder="Senha da rede">
+      </div>
+      <button class="btn btn-primary" onclick="conectarNovoWiFi()">Conectar neste Wi-Fi</button>
+    </div>
+
   </div>
 
   <!-- ═══════════════ CONTROLE ════════════════════════════ -->
@@ -1113,6 +1137,9 @@ var loggedIn = false;
 var currentFile = '';
 var refreshTimer = null;
 var clockTimer = null;
+var abaAtual = 'dashboard';
+var modoLeve = true;
+var abasCarregadas = {clima:false, sdcard:false, config:false, controle:false};
 var ESTADOS_LED = ['wifi','idle','processing','success','error'];
 var NOME_ESTADO = {wifi:'WiFi conectando', idle:'Modo idle', processing:'Processando IA', success:'Sucesso', error:'Erro'};
 var CORES_LED = [
@@ -1136,6 +1163,9 @@ var EFEITOS_LED = [
   {id:'strobo_devagar', nome:'Strobo devagar'},
   {id:'respiracao', nome:'Respiração'}
 ];
+var cachePainel = {status:null, clima:null, config:null};
+var cacheTs = {status:0, clima:0, config:0};
+var cacheTTL = {status:6000, clima:20000, config:30000};
 
 function request(path, opts, cb){
   opts = opts || {};
@@ -1183,6 +1213,8 @@ function doLogout(){
   loggedIn = false;
   clearInterval(refreshTimer);
   clearInterval(clockTimer);
+  abaAtual = 'dashboard';
+  abasCarregadas = {clima:false, sdcard:false, config:false, controle:false};
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('loginPin').value = '';
@@ -1193,16 +1225,48 @@ function startApp(){
   preencherHoras();
   montarControlesLED();
   resetarAbas();
-  refreshDash();
-  loadClima();
-  loadFiles('/aurora');
-  loadConfig();
-  refreshTimer = setInterval(function(){ if(loggedIn) refreshDash(); }, 12000);
+  atualizarBotaoModoLeve();
+  refreshDash(true);
+  iniciarRefreshPainel();
   clearInterval(clockTimer);
   clockTimer = setInterval(function(){
     var n = new Date();
     document.getElementById('topTime').textContent = pad2(n.getHours()) + ':' + pad2(n.getMinutes());
   }, 1000);
+}
+
+function iniciarRefreshPainel(){
+  clearInterval(refreshTimer);
+  refreshTimer = setInterval(function(){
+    if(!loggedIn) return;
+    if(abaAtual === 'dashboard'){
+      refreshDash();
+      return;
+    }
+    if(!modoLeve && abaAtual === 'clima'){
+      loadClima(true);
+      return;
+    }
+    if(!modoLeve && abaAtual === 'controle'){
+      fetchLog();
+    }
+  }, modoLeve ? 25000 : 12000);
+}
+
+function atualizarBotaoModoLeve(){
+  var btn = document.getElementById('perfBtn');
+  if(!btn) return;
+  btn.textContent = modoLeve ? 'Modo Leve: ON' : 'Modo Leve: OFF';
+  btn.style.borderColor = modoLeve ? 'var(--green)' : 'var(--accent2)';
+  btn.style.color = modoLeve ? 'var(--green)' : 'var(--accent2)';
+}
+
+function toggleModoLeve(){
+  modoLeve = !modoLeve;
+  atualizarBotaoModoLeve();
+  iniciarRefreshPainel();
+  toast(modoLeve ? 'Modo leve ativado: menos carga no ESP32.' : 'Modo leve desativado: painel completo.', 'info');
+  if(abaAtual === 'dashboard') refreshDash(true);
 }
 
 function resetarAbas(){
@@ -1216,6 +1280,7 @@ function resetarAbas(){
 }
 
 function showTab(name, btn){
+  abaAtual = name;
   var i;
   var panels = document.querySelectorAll('.tab-panel');
   for(i=0;i<panels.length;i++) panels[i].style.display = 'none';
@@ -1224,17 +1289,35 @@ function showTab(name, btn){
   var tab = document.getElementById('tab-' + name);
   if(tab) tab.style.display = 'block';
   if(btn) btn.className += ' active';
-  if(name==='clima') loadClima();
-  if(name==='sdcard') loadFiles('/aurora');
-  if(name==='config') loadConfig();
+  if(name==='dashboard'){ refreshDash(true); return; }
+  if(name==='clima'){
+    if(!abasCarregadas.clima || !modoLeve){
+      loadClima(true);
+      abasCarregadas.clima = true;
+    }
+    return;
+  }
+  if(name==='sdcard'){
+    if(!abasCarregadas.sdcard){
+      loadFiles('/aurora');
+      abasCarregadas.sdcard = true;
+    }
+    return;
+  }
+  if(name==='config'){
+    if(!abasCarregadas.config || !modoLeve){
+      loadConfig(true);
+      abasCarregadas.config = true;
+    }
+    return;
+  }
+  if(name==='controle'){
+    if(!modoLeve) fetchLog();
+    abasCarregadas.controle = true;
+  }
 }
 
-function refreshDash(){
-  var el = document.getElementById('refreshIcon');
-  el.textContent = '⟳';
-  request('/api/status', {}, function(d){
-    el.textContent = '↻';
-    if(!d) return;
+function aplicarStatusDashboard(d){
     var t = Number(d.chipTemp || 0);
     var tEl = document.getElementById('statChipTemp');
     tEl.innerHTML = t.toFixed(1) + '<span class="stat-unit">°C</span>';
@@ -1266,39 +1349,66 @@ function refreshDash(){
     document.getElementById('infoCidade').textContent = d.cidade || '--';
     document.getElementById('infoSD').textContent = d.sdOK ? '✓ OK' : '✗ Falha';
     document.getElementById('infoOTA').textContent = d.otaAtivo ? '● Ativo' : 'Inativo';
+}
+
+function refreshDash(force){
+  force = !!force;
+  var el = document.getElementById('refreshIcon');
+  if(!force && cachePainel.status && (Date.now() - cacheTs.status) < cacheTTL.status){
+    aplicarStatusDashboard(cachePainel.status);
+    return;
+  }
+  el.textContent = '⟳';
+  request('/api/status', {}, function(d){
+    el.textContent = '↻';
+    if(!d) return;
+    cachePainel.status = d;
+    cacheTs.status = Date.now();
+    aplicarStatusDashboard(d);
   });
 }
 
-function loadClima(){
+function aplicarClima(d){
+  document.getElementById('climaCidade').textContent = d.cidade || '--';
+  document.getElementById('cTemp').innerHTML = Number(d.temp || 0).toFixed(1) + '<span class="stat-unit">°C</span>';
+  document.getElementById('cSens').innerHTML = Number(d.sensTermica || 0).toFixed(1) + '<span class="stat-unit">°C</span>';
+  document.getElementById('cHum').innerHTML = Number(d.umidade || 0) + '<span class="stat-unit">%</span>';
+  document.getElementById('cPressao').innerHTML = Number(d.pressao || 0) + '<span class="stat-unit">hPa</span>';
+  document.getElementById('cVento').innerHTML = Number(d.vento || 0).toFixed(1) + '<span class="stat-unit">km/h</span>';
+  document.getElementById('cDesc').textContent = d.descricao || '--';
+  if(d.prev){
+    document.getElementById('ph1').textContent = d.prev.h1 || '+3h';
+    document.getElementById('ph2').textContent = d.prev.h2 || '+6h';
+    document.getElementById('ph3').textContent = d.prev.h3 || '+9h';
+    document.getElementById('pt1').textContent = Math.round(d.prev.t1 || 0) + '°';
+    document.getElementById('pt2').textContent = Math.round(d.prev.t2 || 0) + '°';
+    document.getElementById('pt3').textContent = Math.round(d.prev.t3 || 0) + '°';
+    document.getElementById('pr1').textContent = Math.round(d.prev.r1 || 0) + '%';
+    document.getElementById('pr2').textContent = Math.round(d.prev.r2 || 0) + '%';
+    document.getElementById('pr3').textContent = Math.round(d.prev.r3 || 0) + '%';
+  }
+  document.getElementById('alertaCard').style.display = d.alertaAtivo ? 'block' : 'none';
+  document.getElementById('alertaMsg').textContent = d.alertaMsg || '';
+}
+
+function loadClima(force){
+  force = !!force;
+  if(!force && cachePainel.clima && (Date.now() - cacheTs.clima) < cacheTTL.clima){
+    aplicarClima(cachePainel.clima);
+    return;
+  }
   request('/api/clima', {}, function(d){
     if(!d) return;
-    document.getElementById('climaCidade').textContent = d.cidade || '--';
-    document.getElementById('cTemp').innerHTML = Number(d.temp || 0).toFixed(1) + '<span class="stat-unit">°C</span>';
-    document.getElementById('cSens').innerHTML = Number(d.sensTermica || 0).toFixed(1) + '<span class="stat-unit">°C</span>';
-    document.getElementById('cHum').innerHTML = Number(d.umidade || 0) + '<span class="stat-unit">%</span>';
-    document.getElementById('cPressao').innerHTML = Number(d.pressao || 0) + '<span class="stat-unit">hPa</span>';
-    document.getElementById('cVento').innerHTML = Number(d.vento || 0).toFixed(1) + '<span class="stat-unit">km/h</span>';
-    document.getElementById('cDesc').textContent = d.descricao || '--';
-    if(d.prev){
-      document.getElementById('ph1').textContent = d.prev.h1 || '+3h';
-      document.getElementById('ph2').textContent = d.prev.h2 || '+6h';
-      document.getElementById('ph3').textContent = d.prev.h3 || '+9h';
-      document.getElementById('pt1').textContent = Math.round(d.prev.t1 || 0) + '°';
-      document.getElementById('pt2').textContent = Math.round(d.prev.t2 || 0) + '°';
-      document.getElementById('pt3').textContent = Math.round(d.prev.t3 || 0) + '°';
-      document.getElementById('pr1').textContent = Math.round(d.prev.r1 || 0) + '%';
-      document.getElementById('pr2').textContent = Math.round(d.prev.r2 || 0) + '%';
-      document.getElementById('pr3').textContent = Math.round(d.prev.r3 || 0) + '%';
-    }
-    document.getElementById('alertaCard').style.display = d.alertaAtivo ? 'block' : 'none';
-    document.getElementById('alertaMsg').textContent = d.alertaMsg || '';
+    cachePainel.clima = d;
+    cacheTs.clima = Date.now();
+    aplicarClima(d);
   });
 }
 
 function atualizarClima(){
   toast('Atualizando clima...', 'info');
   request('/api/clima/update', {method:'POST'}, function(d){
-    if(d && d.ok){ toast('Clima atualizado!', 'success'); loadClima(); }
+    if(d && d.ok){ toast('Clima atualizado!', 'success'); loadClima(true); }
     else toast('Erro ao atualizar.', 'error');
   });
 }
@@ -1394,9 +1504,7 @@ function criarArquivo(){
 
 function closeEditor(){ document.getElementById('editorModal').className = 'modal-overlay'; }
 
-function loadConfig(){
-  request('/api/config', {}, function(d){
-    if(!d) return;
+function aplicarConfig(d){
     document.getElementById('cfgModelo').value = d.modelo || 'gemini-2.5-flash';
     document.getElementById('cfgCidade').value = d.cidade || 'Muriae,BR';
     document.getElementById('cfgPersonalidade').value = d.personalidade || '';
@@ -1412,6 +1520,20 @@ function loadConfig(){
     preencherControleLED('processing', d.ledColors && d.ledColors.processing, d.ledEffects && d.ledEffects.processing);
     preencherControleLED('success', d.ledColors && d.ledColors.success, d.ledEffects && d.ledEffects.success);
     preencherControleLED('error', d.ledColors && d.ledColors.error, d.ledEffects && d.ledEffects.error);
+    atualizarEstadoWiFiUI(d);
+}
+
+function loadConfig(force){
+  force = !!force;
+  if(!force && cachePainel.config && (Date.now() - cacheTs.config) < cacheTTL.config){
+    aplicarConfig(cachePainel.config);
+    return;
+  }
+  request('/api/config', {}, function(d){
+    if(!d) return;
+    cachePainel.config = d;
+    cacheTs.config = Date.now();
+    aplicarConfig(d);
   });
 }
 
@@ -1425,6 +1547,7 @@ function salvarConfig(callback){
     ledEffects: coletarEfeitosLED()
   };
   request('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)}, function(d){
+    if(d && d.ok){ cacheTs.config = 0; }
     if(callback) callback(d && d.ok);
     if(!callback){ if(d && d.ok) toast('Configurações salvas!', 'success'); else toast('Erro ao salvar.', 'error'); }
   });
@@ -1473,6 +1596,55 @@ function fetchLog(){
     var box = document.getElementById('logBox');
     box.innerHTML = lines.join('\\n');
     box.scrollTop = box.scrollHeight;
+  });
+}
+
+
+function atualizarEstadoWiFiUI(cfg){
+  var el = document.getElementById('wifiStateInfo');
+  if(!el) return;
+  var apOn = !!(cfg && cfg.apConfigAtivo);
+  var apNome = (cfg && cfg.apConfigNome) ? cfg.apConfigNome : 'Aurora-Setup';
+  var msg = apOn ? ('AP ativo: ' + apNome + ' (192.168.4.1). ') : 'AP de configuração inativo. ';
+  msg += 'Dê duplo clique no botão WEB para ligar/desligar AP.';
+  el.textContent = msg;
+}
+
+function scanWiFi(){
+  request('/api/wifi/scan', {}, function(d){
+    if(!d || !d.redes){ toast('Falha ao escanear redes.', 'error'); return; }
+    var sel = document.getElementById('wifiScanList');
+    if(!sel) return;
+    sel.innerHTML = '<option value="">-- selecione --</option>';
+    for(var i=0; i<d.redes.length; i++){
+      var r = d.redes[i];
+      var lbl = r.ssid + ' (' + r.rssi + ' dBm' + (r.open ? ', aberta' : '') + ')';
+      sel.options.add(new Option(lbl, r.ssid));
+    }
+    toast('Scan concluído: ' + d.redes.length + ' rede(s).', 'info');
+  });
+}
+
+function conectarNovoWiFi(){
+  var ssidSel = document.getElementById('wifiScanList').value;
+  var ssidMan = document.getElementById('wifiSsid').value.replace(/^\s+|\s+$/g, '');
+  var ssid = ssidMan || ssidSel;
+  var senha = document.getElementById('wifiPass').value;
+  if(!ssid){ toast('Selecione ou digite o SSID.', 'error'); return; }
+  toast('Conectando em ' + ssid + ' ...', 'info');
+  request('/api/wifi/connect', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ssid:ssid, senha:senha})
+  }, function(d){
+    if(d && d.ok){
+      toast('Conectado! IP: ' + (d.ip || '--'), 'success');
+      cacheTs.status = 0;
+      loadConfig(true);
+      refreshDash(true);
+    } else {
+      toast('Falha ao conectar na rede.', 'error');
+    }
   });
 }
 

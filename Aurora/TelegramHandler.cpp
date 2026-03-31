@@ -53,8 +53,13 @@ static bool enfileirarPerguntaGemini(const String& chat_id, const String& pergun
   }
 
   if(gJob.state != GJOB_IDLE){
+    bool mesmaPergunta = (gJob.chatId == chat_id && gJob.pergunta == pergunta);
     xSemaphoreGive(gMutex);
-    bot.sendMessage(chat_id, "⏳ Ainda processando...", "");
+    if(mesmaPergunta){
+      bot.sendMessage(chat_id, "⏳ Essa pergunta já está em processamento. Aguarde a resposta.", "");
+    } else {
+      bot.sendMessage(chat_id, "⏳ Ainda processando outra pergunta...", "");
+    }
     return false;
   }
 
@@ -649,10 +654,12 @@ static void handleText(const String& chat_id, const String& text){
 
   if(!textCmd.startsWith("/")){
     static unsigned long _ultimaRespGemini = 0;
-    if(millis() - _ultimaRespGemini < 5000UL){
+    static String _ultimaPergunta = "";
+    if(millis() - _ultimaRespGemini < 1500UL && textCmd != _ultimaPergunta){
       bot.sendMessage(chat_id,"⏳ Aguarde antes da próxima pergunta.",""); return;
     }
     _ultimaRespGemini = millis();
+    _ultimaPergunta = textCmd;
     if(contarPergunta(textCmd) >= 3) salvarMemoria(text,"");
     incrementarPergunta(textCmd);
     if(enfileirarPerguntaGemini(chat_id, text)){
