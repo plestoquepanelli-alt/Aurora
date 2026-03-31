@@ -27,10 +27,6 @@ String perguntarGemini(const String &pergunta){
     currentState = ERROR_STATE;
     return "GEMINI_API_KEY inválida/não configurada.";
   }
-  if(WiFi.status() != WL_CONNECTED){
-    currentState = ERROR_STATE;
-    return "WiFi desconectado.";
-  }
 
   currentState = PROCESSING;
 
@@ -82,7 +78,7 @@ String perguntarGemini(const String &pergunta){
     req["system_instruction"]["parts"][0]["text"] = dataHoraAtual + " " + personalidade;
 
 
-    req["generationConfig"]["maxOutputTokens"] = 700;
+    req["generationConfig"]["maxOutputTokens"] = 1200;
     req["generationConfig"]["temperature"]     = 0.45;
     req["generationConfig"]["topP"]            = 0.9;
 
@@ -162,10 +158,10 @@ String perguntarGemini(const String &pergunta){
     filtro["candidates"][0]["content"]["parts"][0]["text"] = true;
     filtro["error"]["message"] = true;
 
-    // resp(6144): 1500 tokens × ~6 chars/token + overhead JSON = ~11KB raw
-    // O filtro reduz para apenas o campo de texto (~4-6KB efetivo)
-    // 4096 era insuficiente e truncava silenciosamente respostas longas
-    DynamicJsonDocument resp(4096);
+    filtro["candidates"][0]["finishReason"] = true;
+
+    // Buffer maior evita cortes em respostas longas com 1200 tokens.
+    DynamicJsonDocument resp(8192);
     DeserializationError err = deserializeJson(resp, payload,
       DeserializationOption::Filter(filtro));
 
@@ -176,6 +172,13 @@ String perguntarGemini(const String &pergunta){
     resposta = "Sem resposta";
     if(resp["candidates"][0]["content"]["parts"][0]["text"].is<const char*>())
       resposta = String((const char*)resp["candidates"][0]["content"]["parts"][0]["text"]);
+
+    if(resp["candidates"][0]["finishReason"].is<const char*>()){
+      String finishReason = (const char*)resp["candidates"][0]["finishReason"];
+      if(finishReason == "MAX_TOKENS"){
+        resposta += "\n\n[Resposta longa: limite de tokens atingido. Envie 'continue' para seguir.]";
+      }
+    }
 
     currentState = SUCCESS;
     otimizarHeap();
