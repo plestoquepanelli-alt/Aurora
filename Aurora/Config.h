@@ -21,7 +21,7 @@
 #define SD_SCK          12
 
 // ================= CONSTANTES =================
-#define ADMIN_SENHA     "2918"
+#define ADMIN_SENHA     "1234"
 #define BOT_INTERVAL        2500
 #define WIFI_RETRY_INTERVAL 10000
 #define HTTP_TIMEOUT        15000
