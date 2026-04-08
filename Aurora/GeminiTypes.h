@@ -24,6 +24,7 @@ enum GJobState : uint8_t {
 
 struct GeminiJob {
     volatile GJobState state = GJOB_IDLE;
+    uint32_t jobId    = 0;
     String pergunta  = "";
     String chatId    = "";
     String resposta  = "";
