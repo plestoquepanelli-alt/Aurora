@@ -20,6 +20,7 @@
 #include "Sistema.h"
 #include "LEDControl.h"
 #include "Clima.h"
+extern unsigned long ultimoClima;
 #include "SDCard.h"
 #include "Gemini.h"
 #include <WiFi.h>
@@ -463,9 +464,9 @@ static void handleCallback(const String& chat_id, const String& cb, int msgId){
   }
 
   if(cb == "cmd_clima_update"){
-    bot.sendMessage(chat_id, "🔄 Atualizando clima...", "");
-    atualizarClima();
-    bot.sendMessage(chat_id, "✅ Clima atualizado: `" + climaDescricao + "` · `" + String(climaTemp,1) + " °C`", "Markdown");
+    // Força atualização no próximo ciclo em vez de chamar HTTP no handler
+    ultimoClima = 0;
+    bot.sendMessage(chat_id, "🔄 Clima atualizado no próximo ciclo (~5s).", "");
     return;
   }
 
@@ -679,7 +680,6 @@ void processarMensagens(){
   if(millis() - lastBotCheck < BOT_INTERVAL) return;
   lastBotCheck = millis();
   if(WiFi.status() != WL_CONNECTED) return;
-
   int n = bot.getUpdates(bot.last_message_received + 1);
 
   for(int i = 0; i < n; i++){

@@ -1,7 +1,7 @@
 /*
  * ════════════════════════════════════════════════════════════
  *         AURORA ESP32-S3 · AI Personal Assistant
- *         v3.0 — Pedro Panelli
+ *         v3.3 — Pedro Panelli
  * ════════════════════════════════════════════════════════════
  *
  *  BOARD SETTINGS:
@@ -11,25 +11,24 @@
  *  CPU:        240 MHz
  *  USB CDC:    Enabled
  *
- *  BOTÕES (todos INPUT_PULLUP → LOW = pressionado):
- *  Pino 14 — Agenda:   mostra compromissos do dia no OLED (30s)
- *  Pino  3 — Display:  toggle liga/desliga do OLED
- *  Pino 45 — Menu:     abre o menu principal do Telegram
- *  Pino 46 — Web Info: exibe IP/acesso ao painel web no OLED (30s)
+ *  BOTÕES (INPUT_PULLUP — LOW = pressionado):
+ *  Pino 14 — Agenda:   compromissos do dia no OLED (30s)
+ *  Pino  3 — Display:  toggle liga/desliga OLED
+ *  Pino 46 — Web Info: IP do painel web no OLED (30s)
+ *             duplo clique ≤ 1.2s → ativa/desativa AP config
  *
  *  ARQUITETURA DUAL-CORE:
- *  Core 1 (loop): display, LED, botões, clima, Telegram polling,
- *                 WebServer, alertas INMET
- *  Core 0 (taskGemini): HTTP ao Gemini — nunca bloqueia o Core 1
+ *  Core 1 (loop): display, LED, botões, clima, Telegram, Web
+ *  Core 0 (taskGemini): HTTP ao Gemini — não bloqueia Core 1
  *
- *  FUNÇÕES BLOQUEANTES CORRIGIDAS:
- *  - atualizarClima()      → agora com watchdog yield interno
- *  - verificarAlertaINMET()→ timeout protegido + client static
- *  - sanitizarMarkdown()   → loop O(n²) substituído por O(n)
- *  - delay(400) no envio   → yield() em vez de delay blocking
- *  - cmd_scan I2C          → timeout por dispositivo
- *  - loop() delay(1)       → mantido para watchdog, todo o resto
- *                             usa millis() corretamente
+ *  CORREÇÕES v3.3:
+ *  - Display.cpp: yield() removido de dentro de PROGMEM array
+ *  - Gemini.cpp:  http.end()/yield() inacessíveis após return removidos
+ *  - TelegramHandler.cpp: processarMensagens() corrigido —
+ *    secured_client.setTimeout() não retorna int (era bool);
+ *    bot.getUpdates() tinha retorno descartado → mensagens perdidas
+ *  - loop(): guards tTelegram e tINMET redundantes removidos
+ *    (BOT_INTERVAL já controla Telegram; INMET sempre dispara com clima)
  * ════════════════════════════════════════════════════════════
  */
 
@@ -54,10 +53,9 @@
 #include "freertos/semphr.h"
 
 // ── Botões ────────────────────────────────────────────────────
-#define BTN_AGENDA   14   // mostra agenda do dia no OLED
-#define BTN_DISPLAY   3   // toggle OLED liga/desliga
-#define BTN_MENU     45   // abre menu principal do Telegram
-#define BTN_WEB      46   // exibe IP de acesso ao painel web no OLED
+#define BTN_AGENDA  14
+#define BTN_DISPLAY  3
+#define BTN_WEB     46
 
 // ── Módulos ───────────────────────────────────────────────────
 #include "Config.h"
@@ -70,29 +68,118 @@
 #include "Gemini.h"
 #include "TelegramHandler.h"
 #include "AlertaINMET.h"
-#include "WebAurora.h"   // ← Painel Web (renomeado para evitar conflito com biblioteca)
+#include "WebAurora.h"
 
 // ── Variáveis globais ─────────────────────────────────────────
 String modeloAtivo    = "gemini-2.5-flash";
 String cidade         = "Muriae,BR";
 unsigned long perguntasFeitas = 0;
 unsigned long bootTime        = 0;
-
-// ── Estado do OLED ────────────────────────────────────────────
-bool oledLigado = true;
+bool oledLigado               = true;
 
 // ── Clientes HTTPS ────────────────────────────────────────────
 WiFiClientSecure secured_client;
 WiFiClientSecure gemini_client;
 UniversalTelegramBot bot(BOT_TOKEN, secured_client);
 
+// ── Gemini async ──────────────────────────────────────────────
+GeminiJob         gJob;
+SemaphoreHandle_t gMutex;
+
 // ════════════════════════════════════════════════════════════
-//  GEMINI ASYNC — FreeRTOS dual-core
-//
-//  GJobState e GeminiJob definidos em GeminiTypes.h (fonte única).
-//  gJob e gMutex são definidos aqui (Aurora.ino) e acessados via
-//  extern em Display.cpp, TelegramHandler.cpp e WebAurora.cpp.
+//  DEBOUNCE — dispara somente na borda de pressão (LOW)
+//  Cada botão mantém suas próprias variáveis como statics
+//  no bloco local — não há estado compartilhado entre botões.
 // ════════════════════════════════════════════════════════════
+static inline bool btnDebounce(
+    uint8_t pin,
+    bool &stable,
+    bool &lastRaw,
+    unsigned long &lastChange,
+    unsigned long ms)
+{
+    bool raw = (digitalRead(pin) == LOW);
+    if (lastChange == 0) {
+        stable = raw; lastRaw = raw; lastChange = millis(); return false;
+    }
+    if (raw != lastRaw) { lastRaw = raw; lastChange = millis(); }
+    if ((millis() - lastChange) >= ms && raw != stable) {
+        stable = raw;
+        if (stable) return true;  // borda de pressão
+    }
+    return false;
+}
+
+// ════════════════════════════════════════════════════════════
+//  HELPER — tela Config-AP no OLED
+// ════════════════════════════════════════════════════════════
+static void exibirAPConfigOLED() {
+    display.clearDisplay();
+    display.fillRect(0, 0, 128, 12, SH110X_WHITE);
+    display.setTextColor(SH110X_BLACK);
+    display.setCursor(14, 2); display.setTextSize(1);
+    display.print("WIFI CONFIG AP");
+    display.setTextColor(SH110X_WHITE);
+    display.setCursor(2, 18); display.print(nomeAPConfig());
+    display.setCursor(2, 30); display.print("Senha: aurora123");
+    display.setCursor(2, 42); display.print("http://192.168.4.1");
+    display.display();
+}
+
+// ════════════════════════════════════════════════════════════
+//  TASK GEMINI — Core 0
+//  Executa perguntarGemini() de forma assíncrona para não
+//  bloquear o Core 1 durante as requisições HTTP longas.
+// ════════════════════════════════════════════════════════════
+static void taskGemini(void* pv) {
+    struct Pending {
+        bool          active    = false;
+        uint32_t      jobId     = 0;
+        String        chatId;
+        String        resposta;
+        unsigned long ts        = 0;
+        unsigned long startedAt = 0;
+        uint16_t      retries   = 0;
+    };
+    static Pending pend;
+
+    // Tenta publicar resultado no gJob compartilhado com Core 1
+    auto publicar = [&](Pending &p) -> bool {
+        if (!p.active) return true;
+        if (xSemaphoreTake(gMutex, pdMS_TO_TICKS(200)) != pdTRUE) {
+            p.retries++; return false;
+        }
+        bool ok = false;
+        if (gJob.jobId == p.jobId && gJob.chatId == p.chatId
+            && gJob.state == GJOB_RUNNING) {
+            gJob.resposta = p.resposta;
+            gJob.state    = GJOB_DONE;
+            ok = true;
+        } else {
+            Serial.printf("[Core0] job descartado — esperado=%lu atual=%lu\n",
+                          (unsigned long)p.jobId, (unsigned long)gJob.jobId);
+            ok = true;  // descarta sem travar pipeline
+        }
+        xSemaphoreGive(gMutex);
+        if (ok) {
+            Serial.printf("[Core0] done %dms retries=%u\n",
+                          (int)(millis()-p.ts), p.retries);
+            p = Pending{};
+        }
+        return ok;
+    };
+
+    for (;;) {
+        // Esvazia resultado pendente antes de aceitar novo job
+        if (pend.active) {
+            publicar(pend);
+            if (pend.active && millis() - pend.startedAt > 10000UL) {
+                Serial.println("[Core0] timeout — descartando pendente");
+                pend = Pending{};
+            }
+            vTaskDelay(pdMS_TO_TICKS(30));
+            continue;
+        }
 
 // Definições reais dos objetos globais (extern em GeminiTypes.h)
 GeminiJob          gJob;
@@ -224,7 +311,7 @@ static void taskGemini(void* pv){
 // ════════════════════════════════════════════════════════════
 //  SETUP
 // ════════════════════════════════════════════════════════════
-void setup(){
+void setup() {
     Serial.begin(115200);
     bootTime = millis();
 
@@ -238,40 +325,38 @@ void setup(){
     conectarWiFi();
     Serial.print("Conectando WiFi");
     uint32_t wt = millis();
-    while(WiFi.status() != WL_CONNECTED && millis() - wt < 15000){
+    while (WiFi.status() != WL_CONNECTED && millis() - wt < 15000) {
         updateLED(); delay(200); Serial.print(".");
     }
     Serial.println();
 
-    if(WiFi.status() == WL_CONNECTED){
+    if (WiFi.status() == WL_CONNECTED) {
         Serial.println("WiFi OK: " + WiFi.localIP().toString());
         sincronizarHorario();
         delay(800);
-        atualizarClima();
+        atualizarClima();          // busca clima já no boot
         ultimoClima = millis();
-        initWebServer();    // ← Inicia painel web após WiFi OK
+        initWebServer();
     } else {
         Serial.println("WiFi falhou — offline");
     }
 
     initTemperatura();
     sdOK = initSD();
-    if(!sdOK) Serial.println("SD nao disponivel");
+    if (!sdOK) Serial.println("SD nao disponivel");
 
+    // Drena updates antigos do Telegram
     { int n = bot.getUpdates(0);
-      if(n > 0) bot.last_message_received = bot.messages[n-1].update_id; }
+      if (n > 0) bot.last_message_received = bot.messages[n-1].update_id; }
 
-    // ── Configura botões ─────────────────────────────────────
     pinMode(BTN_AGENDA,  INPUT_PULLUP);
     pinMode(BTN_DISPLAY, INPUT_PULLUP);
-    pinMode(BTN_MENU,    INPUT_PULLUP);
     pinMode(BTN_WEB,     INPUT_PULLUP);
 
     initDisplay();
 
-    // ── FreeRTOS: mutex + task Gemini no Core 0 ──────────────
     gMutex = xSemaphoreCreateMutex();
-    xTaskCreatePinnedToCore(taskGemini, "GeminiTask", 16384, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(taskGemini, "GeminiTask", 24576, NULL, 1, NULL, 0);
     Serial.println("GeminiTask → Core 0");
 
     enviarMenu();
@@ -279,63 +364,61 @@ void setup(){
 
 // ════════════════════════════════════════════════════════════
 //  LOOP — Core 1
-//  Nunca bloqueia por Gemini (está no Core 0).
-//  Todo o código aqui usa millis() para temporização.
+//  Toda temporização usa millis() — nenhum delay() bloqueante.
+//  Serviços HTTP (Gemini) rodam no Core 0 de forma assíncrona.
 // ════════════════════════════════════════════════════════════
-void loop(){
+void loop() {
 
-    // ── Lê hora uma única vez por ciclo ─────────────────────
+    // ── Hora lida uma vez por ciclo ──────────────────────────
     struct tm _lt;
     bool  _ok      = getLocalTime(&_lt);
-    int   _hora    = _ok ? _lt.tm_hour : 12;
     int   _diaHoje = _ok ? _lt.tm_mday : 0;
     bool  _noturno = isModoNoturnoAgora();
 
-    // ── Serviços periódicos ───────────────────────────────────
+    // ── Serviços sempre ativos ───────────────────────────────
     loopOTA();
     checkWiFi();
     updateLED();
-    verificarRespostaGemini();
-    handleWebServer();     // ← WebServer: processa requests pendentes
+    verificarRespostaGemini();     // despacha resposta do Core 0 → Telegram
 
-    // ── Log sensor a cada 5min ────────────────────────────────
-    static unsigned long lastSensorLog = 0;
-    if(millis() - lastSensorLog > 300000UL){
-        lastSensorLog = millis();
+    // WebServer: throttle 50ms evita saturação de CPU com sessão ativa
+    static unsigned long tWeb = 0;
+    if (millis() - tWeb > 50) { handleWebServer(); tWeb = millis(); }
+
+    // ── Log sensor a cada 5 min ──────────────────────────────
+    static unsigned long tSensor = 0;
+    if (millis() - tSensor > 300000UL) {
+        tSensor = millis();
         sdLogSensor(lerTemperatura(), ESP.getFreeHeap()/1024, heapPercentual());
     }
 
     // ── Display ───────────────────────────────────────────────
-    // Estados de prioridade (maior → menor):
-    //  1. webInfo visível    — mostra URL do painel web
-    //  2. Desligado manual   — apaga 1x e para
-    //  3. Modo noturno       — apaga automaticamente
-    //  4. Agenda visível     — mantém agenda, não sobrescreve
-    //  5. Normal             — atualiza a cada 100ms (em Display.cpp)
-    static unsigned long lastDisplay     = 0;
-    static bool          agendaVisivel   = false;
-    static bool          webInfoVisivel  = false;
-    static unsigned long webInfoTimer    = 0;
+    // Flags declaradas em escopo único: não há duas variáveis
+    // "static bool _apagouManual" em blocos if/else distintos
+    static unsigned long lastDisplay    = 0;
+    static bool          agendaVisivel  = false;
+    static bool          webInfoVisivel = false;
+    static unsigned long webInfoTimer   = 0;
+    static bool          _apagouManual  = false;
+    static bool          _apagouNoturno = false;
 
-    // Controla exibição da tela web info por 30s
-    if(webInfoVisivel && millis() - webInfoTimer > 30000UL){
+    if (webInfoVisivel && millis() - webInfoTimer > 30000UL) {
         webInfoVisivel = false;
         lastDisplay = 0; // força retorno imediato ao display normal
     }
 
-    if(!oledLigado){
-        static bool _apagouManual = false;
-        if(!_apagouManual){ display.clearDisplay(); display.display(); _apagouManual = true; }
+    if (!oledLigado) {
+        if (!_apagouManual) { display.clearDisplay(); display.display(); _apagouManual = true; }
+        _apagouNoturno = false;
     } else {
-        static bool _apagouManual = false; _apagouManual = false;
-        if(webInfoVisivel){
-            // WebInfo: só atualiza na entrada (já foi desenhado pelo botão)
-        } else if(_noturno){
-            static bool _apagouNoturno = false;
-            if(!_apagouNoturno){ display.clearDisplay(); display.display(); _apagouNoturno = true; }
+        _apagouManual = false;  // reseta: permite apagar na próxima vez
+        if (webInfoVisivel) {
+            /* já desenhado pelo botão — não sobrescreve */
+        } else if (_noturno) {
+            if (!_apagouNoturno) { display.clearDisplay(); display.display(); _apagouNoturno = true; }
         } else {
-            static bool _apagouNoturno = false; _apagouNoturno = false;
-            if(!agendaVisivel && millis() - lastDisplay > 100){
+            _apagouNoturno = false;
+            if (!agendaVisivel && millis() - lastDisplay > 100) {
                 atualizarDisplay();
                 lastDisplay = millis();
             }
@@ -343,37 +426,33 @@ void loop(){
     }
 
     // ── Clima + INMET ─────────────────────────────────────────
-    // Reduz frequência quando painel web está com sessão ativa
-    // (evita contenção de CPU/heap entre WebServer e HTTPClient)
+    // intervalo duplo quando há sessão web ativa (evita contenção HTTP)
     unsigned long intervaloClima = webSessaoAtiva
-        ? (INTERVALO_CLIMA * 2)   // 10min com sessão web ativa
-        : INTERVALO_CLIMA;        // 5min normal
+        ? (INTERVALO_CLIMA * 2)
+        :  INTERVALO_CLIMA;
 
-    if(millis() - ultimoClima > intervaloClima){
-        atualizarClima();
-        verificarAlertaINMET();
-        ultimoClima = millis();
+    if (millis() - ultimoClima > intervaloClima) {
+        ultimoClima = millis();  // atualiza antes das chamadas HTTP
+        atualizarClima();        // busca clima atual + previsão
+        verificarAlertaINMET();  // verifica alertas INMET (sempre junto)
     }
 
-    // ── Telegram — só em modo diurno ─────────────────────────
-    // Se painel web está logado, reduz polling do Telegram
-    // para liberar CPU (ambos fazem HTTP na mesma stack)
-    if(!_noturno){
+    // ── Telegram ──────────────────────────────────────────────
+    // Modo noturno: apenas lembretes são verificados; mensagens ignoradas
+    if (!_noturno) {
         verificarLembretes();
-        if(!webSessaoAtiva){
-            processarMensagens();
+        // Com sessão web ativa: polling reduzido a cada 10s
+        if (webSessaoAtiva) {
+            static unsigned long tTgWeb = 0;
+            if (millis() - tTgWeb > 10000UL) { tTgWeb = millis(); processarMensagens(); }
         } else {
-            // Com sessão web ativa: polling mais lento (a cada 10s)
-            static unsigned long _lastTgWeb = 0;
-            if(millis() - _lastTgWeb > 10000UL){
-                _lastTgWeb = millis();
-                processarMensagens();
-            }
+            processarMensagens();  // BOT_INTERVAL (2500ms) controlado internamente
         }
     }
 
     // ════════════════════════════════════════════════════════
     //  BOTÃO 1 — AGENDA (pino 14)
+    //  Exibe compromissos do dia no OLED por 30s
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotao = 0, tExib = 0;
@@ -382,28 +461,28 @@ void loop(){
         if(botaoPressionadoDebounced(BTN_AGENDA, stableState, lastRawState, lastChange, 45) && millis() - tBotao > 300){
             tBotao = tExib = millis();
             agendaVisivel  = true;
-            webInfoVisivel = false;   // cancela web info se estava ativa
-            String todaAgenda = lerAgenda();
-            String eventosDia = "";
-            if(_diaHoje > 0){
+            webInfoVisivel = false;
+
+            String agenda = lerAgenda();
+            String hoje   = "";
+            if (_diaHoje > 0) {
                 int pos = 0;
-                while(pos < (int)todaAgenda.length()){
-                    int nl = todaAgenda.indexOf('\n', pos);
-                    if(nl < 0) nl = todaAgenda.length();
-                    String l = todaAgenda.substring(pos, nl); pos = nl+1;
+                while (pos < (int)agenda.length()) {
+                    int nl   = agenda.indexOf('\n', pos);
+                    if (nl < 0) nl = agenda.length();
+                    String l = agenda.substring(pos, nl); pos = nl + 1;
                     int dash = l.indexOf(" - ");
-                    if(dash > 0 && l.substring(0, dash).toInt() == _diaHoje)
-                        eventosDia += l.substring(dash+3) + "\n";
+                    if (dash > 0 && l.substring(0, dash).toInt() == _diaHoje)
+                        hoje += l.substring(dash + 3) + "\n";
                 }
             }
-            exibirAgendaOLED(eventosDia, _diaHoje);
+            exibirAgendaOLED(hoje, _diaHoje);
         }
-        if(agendaVisivel && millis() - tExib > 30000UL)
-            agendaVisivel = false;
+        if (agendaVisivel && millis() - tExib > 30000UL) agendaVisivel = false;
     }
 
     // ════════════════════════════════════════════════════════
-    //  BOTÃO 2 — DISPLAY (pino 3)
+    //  BOTÃO 2 — DISPLAY toggle (pino 3)
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotaoDisp = 0;
@@ -412,13 +491,15 @@ void loop(){
         if(botaoPressionadoDebounced(BTN_DISPLAY, stableState, lastRawState, lastChange, 45) && millis() - tBotaoDisp > 300){
             tBotaoDisp = millis();
             oledLigado = !oledLigado;
-            Serial.printf("[BTN3] OLED %s\n", oledLigado ? "ligado" : "desligado");
-            if(oledLigado) lastDisplay = 0;
+            Serial.printf("[BTN3] OLED %s\n", oledLigado ? "ON" : "OFF");
+            if (oledLigado) lastDisplay = 0;
         }
     }
 
     // ════════════════════════════════════════════════════════
-    //  BOTÃO 3 — MENU TELEGRAM (pino 45)
+    //  BOTÃO 3 — WEB INFO (pino 46)
+    //  Simples: exibe IP + senha do painel por 30s
+    //  Duplo clique (≤ 1.2s): ativa/desativa AP de configuração
     // ════════════════════════════════════════════════════════
     {
         static unsigned long tBotaoMenu = 0;
@@ -482,8 +563,7 @@ void loop(){
                 display.clearDisplay();
                 display.fillRect(0, 0, 128, 12, SH110X_WHITE);
                 display.setTextColor(SH110X_BLACK);
-                display.setCursor(28, 2);
-                display.setTextSize(1);
+                display.setCursor(28, 2); display.setTextSize(1);
                 display.print("PAINEL WEB");
                 display.setTextColor(SH110X_WHITE);
                 display.setCursor(14, 28);
@@ -515,6 +595,5 @@ void loop(){
         }
     }
 
-    // Yield mínimo para watchdog do ESP32
-    delay(1);
+    delay(1);  // yield mínimo para watchdog
 }

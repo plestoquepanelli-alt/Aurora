@@ -6,4 +6,6 @@
 // ================= FUNÇÕES PÚBLICAS =================
 String perguntarGemini(const String &pergunta);
 
+void invalidarCachePersonalidade();
+
 #endif

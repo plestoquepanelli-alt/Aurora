@@ -2,12 +2,12 @@
 #define CONFIG_H
 
 // ================= CREDENCIAIS =================
-#define WIFI_SSID       "imicro_3696-2800"
-#define WIFI_PASSWORD   "Quintadasflores1"
-#define BOT_TOKEN       "8600036831:AAFxt60zTolunCXtjUIgPaiDo-GXc9S9BjQ"
-#define MEU_ID          "5401651820"
-#define GEMINI_API_KEY  "AIzaSyDtIn8VPo1v2FoXbIbfhqI9sdJSo9B_wfw"
-#define WEATHER_API_KEY "bae8fd6f5bd0b6fa4e6d55fb7ea3d9a2"
+#define WIFI_SSID       "x-x-x-x-x-x-x"
+#define WIFI_PASSWORD   "x-x-x-x-x-x-x"
+#define BOT_TOKEN       "x-x-x-x:x-x-x-x-x-x-x-x"
+#define MEU_ID          "x-x-x-x-x-x"
+#define GEMINI_API_KEY  "x-x-x-x-x-x"
+#define WEATHER_API_KEY "x-x-x-x-x-x"
 
 // ================= PINOS =================
 #define LED_PIN         48
@@ -21,10 +21,10 @@
 #define SD_SCK          12
 
 // ================= CONSTANTES =================
-#define ADMIN_SENHA     "2918"
+#define ADMIN_SENHA     "1234"
 #define BOT_INTERVAL        2500
 #define WIFI_RETRY_INTERVAL 10000
-#define HTTP_TIMEOUT        15000
+#define HTTP_TIMEOUT        6000
 #define HEAP_MINIMO         30000
 #define LED_UPDATE_INTERVAL 15
 
