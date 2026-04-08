@@ -181,28 +181,128 @@ static void taskGemini(void* pv) {
             continue;
         }
 
-        // Verifica se há novo job aguardando
-        bool hasJob = false;
-        String pergunta, chatId;
-        unsigned long ts = 0;
-        uint32_t jobId   = 0;
+// Definições reais dos objetos globais (extern em GeminiTypes.h)
+GeminiJob          gJob;
+SemaphoreHandle_t  gMutex;
 
-        if (xSemaphoreTake(gMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-            if (gJob.state == GJOB_PENDING) {
+static inline bool botaoPressionadoDebounced(
+    uint8_t pin,
+    bool &stableState,
+    bool &lastRawState,
+    unsigned long &lastChangeMs,
+    unsigned long debounceMs){
+    bool rawPressed = (digitalRead(pin) == LOW);
+    if(lastChangeMs == 0){
+        stableState = rawPressed;
+        lastRawState = rawPressed;
+        lastChangeMs = millis();
+        return false;
+    }
+    if(rawPressed != lastRawState){
+        lastRawState = rawPressed;
+        lastChangeMs = millis();
+    }
+    if((millis() - lastChangeMs) >= debounceMs && rawPressed != stableState){
+        stableState = rawPressed;
+        if(stableState) return true;
+    }
+    return false;
+}
+
+static void taskGemini(void* pv){
+    struct PendingResultado {
+        bool active = false;
+        uint32_t jobId = 0;
+        String chatId = "";
+        String resposta = "";
+        unsigned long ts = 0;
+        unsigned long startedAt = 0;
+        uint16_t retries = 0;
+    };
+    static PendingResultado pend;
+
+    auto tentarPublicarResultado = [&](PendingResultado &p) -> bool {
+        if(!p.active) return true;
+        if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(200)) != pdTRUE){
+            p.retries++;
+            return false;
+        }
+
+        bool publicado = false;
+        // Fluxo normal: ainda é o mesmo job em execução.
+        if(gJob.jobId == p.jobId && gJob.chatId == p.chatId && gJob.state == GJOB_RUNNING){
+            gJob.resposta = p.resposta;
+            gJob.state    = GJOB_DONE;
+            publicado = true;
+        } else {
+            // Segurança: se o job já mudou, nunca sobrescreve o job atual.
+            // Isso evita entregar resposta antiga no chat errado.
+            Serial.printf("[Core0] Gemini resultado descartado (job mudou). esperado=%lu atual=%lu\n",
+                          (unsigned long)p.jobId, (unsigned long)gJob.jobId);
+            publicado = true; // consome pendente para não travar pipeline
+        }
+
+        xSemaphoreGive(gMutex);
+        if(publicado){
+            Serial.printf("[Core0] Gemini done %dms (retries=%u)\n",
+                          (int)(millis() - p.ts), p.retries);
+            p = PendingResultado{};
+        }
+        return publicado;
+    };
+
+    for(;;){
+        if(pend.active){
+            tentarPublicarResultado(pend);
+            if(pend.active && (millis() - pend.startedAt > 10000UL)){
+                Serial.println("[Core0] Gemini timeout fallback: finalizando job com erro amigavel");
+                if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(200)) == pdTRUE){
+                    if(gJob.jobId == pend.jobId && gJob.chatId == pend.chatId && gJob.state == GJOB_RUNNING){
+                        gJob.resposta = "Falha ao entregar resposta do Gemini (timeout interno). Tente novamente.";
+                        gJob.state = GJOB_DONE;
+                    } else if(gJob.state == GJOB_RUNNING && gJob.jobId == pend.jobId){
+                        gJob.state = GJOB_IDLE;
+                    }
+                    xSemaphoreGive(gMutex);
+                }
+                pend = PendingResultado{};
+            }
+            vTaskDelay(pdMS_TO_TICKS(30));
+            continue;
+        }
+
+        bool hasJob = false;
+        String pergunta = "";
+        String chatId = "";
+        unsigned long ts = 0;
+        uint32_t jobId = 0;
+
+        if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(100)) == pdTRUE){
+            if(gJob.state == GJOB_PENDING){
                 gJob.state = GJOB_RUNNING;
-                pergunta   = gJob.pergunta;
-                chatId     = gJob.chatId;
-                ts         = gJob.ts;
-                jobId      = gJob.jobId;
-                hasJob     = true;
+                pergunta = gJob.pergunta;
+                chatId   = gJob.chatId;
+                ts       = gJob.ts;
+                jobId    = gJob.jobId;
+                hasJob   = true;
             }
             xSemaphoreGive(gMutex);
         }
 
-        if (hasJob) {
-            Serial.printf("[Core0] start heap=%d\n", ESP.getFreeHeap());
-            pend = { true, jobId, chatId, perguntarGemini(pergunta), ts, millis(), 0 };
-            publicar(pend);
+        if(hasJob){
+            Serial.printf("[Core0] Gemini start heap=%d\n", ESP.getFreeHeap());
+            String resp = perguntarGemini(pergunta);
+            if(resp.length() == 0){
+                resp = "Sem resposta do Gemini. Tente novamente.";
+            }
+            pend.active = true;
+            pend.jobId = jobId;
+            pend.chatId = chatId;
+            pend.resposta = resp;
+            pend.ts = ts;
+            pend.startedAt = millis();
+            pend.retries = 0;
+            tentarPublicarResultado(pend);
         }
         vTaskDelay(pdMS_TO_TICKS(30));
     }
@@ -304,7 +404,7 @@ void loop() {
 
     if (webInfoVisivel && millis() - webInfoTimer > 30000UL) {
         webInfoVisivel = false;
-        lastDisplay    = 0;  // força refresh imediato ao voltar
+        lastDisplay = 0; // força retorno imediato ao display normal
     }
 
     if (!oledLigado) {
@@ -355,11 +455,11 @@ void loop() {
     //  Exibe compromissos do dia no OLED por 30s
     // ════════════════════════════════════════════════════════
     {
-        static bool stb = false, lRaw = false;
-        static unsigned long lChg = 0, tBtn = 0, tExib = 0;
-
-        if (btnDebounce(BTN_AGENDA, stb, lRaw, lChg, 45) && millis() - tBtn > 300) {
-            tBtn = tExib = millis();
+        static unsigned long tBotao = 0, tExib = 0;
+        static bool stableState = false, lastRawState = false;
+        static unsigned long lastChange = 0;
+        if(botaoPressionadoDebounced(BTN_AGENDA, stableState, lastRawState, lastChange, 45) && millis() - tBotao > 300){
+            tBotao = tExib = millis();
             agendaVisivel  = true;
             webInfoVisivel = false;
 
@@ -385,11 +485,11 @@ void loop() {
     //  BOTÃO 2 — DISPLAY toggle (pino 3)
     // ════════════════════════════════════════════════════════
     {
-        static bool stb = false, lRaw = false;
-        static unsigned long lChg = 0, tBtn = 0;
-
-        if (btnDebounce(BTN_DISPLAY, stb, lRaw, lChg, 45) && millis() - tBtn > 300) {
-            tBtn      = millis();
+        static unsigned long tBotaoDisp = 0;
+        static bool stableState = false, lastRawState = false;
+        static unsigned long lastChange = 0;
+        if(botaoPressionadoDebounced(BTN_DISPLAY, stableState, lastRawState, lastChange, 45) && millis() - tBotaoDisp > 300){
+            tBotaoDisp = millis();
             oledLigado = !oledLigado;
             Serial.printf("[BTN3] OLED %s\n", oledLigado ? "ON" : "OFF");
             if (oledLigado) lastDisplay = 0;
@@ -402,30 +502,64 @@ void loop() {
     //  Duplo clique (≤ 1.2s): ativa/desativa AP de configuração
     // ════════════════════════════════════════════════════════
     {
-        static bool stb = false, lRaw = false;
-        static unsigned long lChg = 0, tBtn = 0, tUltimo = 0;
+        static unsigned long tBotaoMenu = 0;
+        static bool stableState = false, lastRawState = false;
+        static unsigned long lastChange = 0;
+        if(botaoPressionadoDebounced(BTN_MENU, stableState, lastRawState, lastChange, 50) && millis() - tBotaoMenu > 400){
+            tBotaoMenu = millis();
+            Serial.println("[BTN45] Menu principal");
+            enviarMenu();
+        }
+    }
 
-        if (btnDebounce(BTN_WEB, stb, lRaw, lChg, 45) && millis() - tBtn > 300) {
-            bool duploClique = (tUltimo > 0 && millis() - tUltimo <= 1200UL);
-            tBtn = tUltimo = millis();
-
-            if (duploClique) {
-                if (!apConfigAtivo()) {
+    // ════════════════════════════════════════════════════════
+    //  BOTÃO 4 — WEB INFO (pino 46)
+    //  Exibe IP e acesso ao painel web no OLED por 30s.
+    //  Útil para saber o endereço sem precisar do Serial.
+    //  Debounce de 500ms.
+    // ════════════════════════════════════════════════════════
+    {
+        static unsigned long tBotaoWeb = 0;
+        static unsigned long ultimoCliqueWeb = 0;
+        static bool stableState = false, lastRawState = false;
+        static unsigned long lastChange = 0;
+        if(botaoPressionadoDebounced(BTN_WEB, stableState, lastRawState, lastChange, 45) && millis() - tBotaoWeb > 300){
+            tBotaoWeb = millis();
+            bool duploClique = (ultimoCliqueWeb > 0 && (millis() - ultimoCliqueWeb) <= 1200UL);
+            ultimoCliqueWeb = millis();
+            if(duploClique){
+                if(!apConfigAtivo()){
                     iniciarModoConfigAP();
-                    Serial.println("[BTN46] AP config ON");
+                    Serial.println("[BTN46] Duplo clique: AP de configuração ativado");
                 } else {
                     pararModoConfigAP();
-                    Serial.println("[BTN46] AP config OFF");
+                    Serial.println("[BTN46] Duplo clique: AP de configuração desativado");
                 }
+            } else {
+                Serial.println("[BTN46] Web info OLED");
             }
-
-            agendaVisivel  = false;
+            agendaVisivel  = false;   // cancela agenda se estava ativa
             webInfoVisivel = true;
             webInfoTimer   = millis();
-
-            if (apConfigAtivo())                        exibirAPConfigOLED();
-            else if (WiFi.status() == WL_CONNECTED)     exibirAcessoWebOLED();
-            else {
+            if(apConfigAtivo()){
+                display.clearDisplay();
+                display.fillRect(0, 0, 128, 12, SH110X_WHITE);
+                display.setTextColor(SH110X_BLACK);
+                display.setCursor(14, 2);
+                display.setTextSize(1);
+                display.print("WIFI CONFIG AP");
+                display.setTextColor(SH110X_WHITE);
+                display.setCursor(2, 18);
+                display.print(nomeAPConfig());
+                display.setCursor(2, 30);
+                display.print("Senha: aurora123");
+                display.setCursor(2, 42);
+                display.print("http://192.168.4.1");
+                display.display();
+            } else if(WiFi.status() == WL_CONNECTED){
+                exibirAcessoWebOLED();
+            } else {
+                // Mostra aviso de offline
                 display.clearDisplay();
                 display.fillRect(0, 0, 128, 12, SH110X_WHITE);
                 display.setTextColor(SH110X_BLACK);
@@ -437,13 +571,27 @@ void loop() {
                 display.display();
             }
         }
-
-        // Refresca info a cada 5s enquanto visível
-        static unsigned long tRef = 0;
-        if (webInfoVisivel && millis() - tRef > 5000) {
-            tRef = millis();
-            if      (apConfigAtivo())                    exibirAPConfigOLED();
-            else if (WiFi.status() == WL_CONNECTED)      exibirAcessoWebOLED();
+        // Refresca a tela web info a cada 5s enquanto visível
+        // (o IP não muda, mas muda o estado da sessão)
+        static unsigned long _lastWebRefresh = 0;
+        if(webInfoVisivel && millis() - _lastWebRefresh > 5000){
+            _lastWebRefresh = millis();
+            if(apConfigAtivo()){
+                display.clearDisplay();
+                display.fillRect(0, 0, 128, 12, SH110X_WHITE);
+                display.setTextColor(SH110X_BLACK);
+                display.setCursor(14, 2);
+                display.setTextSize(1);
+                display.print("WIFI CONFIG AP");
+                display.setTextColor(SH110X_WHITE);
+                display.setCursor(2, 18);
+                display.print(nomeAPConfig());
+                display.setCursor(2, 30);
+                display.print("Senha: aurora123");
+                display.setCursor(2, 42);
+                display.print("http://192.168.4.1");
+                display.display();
+            } else if(WiFi.status() == WL_CONNECTED) exibirAcessoWebOLED();
         }
     }
 

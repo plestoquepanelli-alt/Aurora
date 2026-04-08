@@ -381,45 +381,23 @@ static void handleWiFiState(){
   sendJSON(out);
 }
 
-// ── Scan WiFi assíncrono ─────────────────────────────────────
-// Lança o scan em /api/wifi/scan (retorna {scanning:true}) e
-// entrega o resultado em /api/wifi/scan/result quando pronto.
-// Elimina o bloqueio síncrono de 2-3s no Core 1.
-static bool _wifiScanEmAndamento = false;
-
 static void handleWiFiScan(){
   if(!checkAuth()) return;
-  if(_wifiScanEmAndamento){
-    // Verifica se o scan já terminou
-    int n = WiFi.scanComplete();
-    if(n == WIFI_SCAN_RUNNING){
-      sendJSON(R"({"scanning":true,"ok":true})"); return;
-    }
-    _wifiScanEmAndamento = false;
-    // Scan completo — retorna resultado
-    DynamicJsonDocument doc(3072);
-    JsonArray redes = doc.createNestedArray("redes");
-    if(n > 0){
-      for(int i = 0; i < n && i < 25; i++){
-        String s = WiFi.SSID(i);
-        if(s.isEmpty()) continue;
-        JsonObject r = redes.createNestedObject();
-        r["ssid"] = s;
-        r["rssi"] = WiFi.RSSI(i);
-        r["open"] = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN);
-      }
-    }
-    WiFi.scanDelete();
-    doc["ok"] = true;
-    doc["done"] = true;
-    String out; serializeJson(doc, out);
-    sendJSON(out);
-    return;
+  int n = WiFi.scanNetworks(false, true);
+  DynamicJsonDocument doc(3072);
+  JsonArray redes = doc.createNestedArray("redes");
+  for(int i = 0; i < n && i < 25; i++){
+    String s = WiFi.SSID(i);
+    if(s.isEmpty()) continue;
+    JsonObject r = redes.createNestedObject();
+    r["ssid"] = s;
+    r["rssi"] = WiFi.RSSI(i);
+    r["open"] = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN);
   }
-  // Inicia scan assíncrono (não bloqueia)
-  WiFi.scanNetworks(true /*async*/, true /*show hidden*/);
-  _wifiScanEmAndamento = true;
-  sendJSON(R"({"scanning":true,"ok":true})");
+  WiFi.scanDelete();
+  doc["ok"] = true;
+  String out; serializeJson(doc, out);
+  sendJSON(out);
 }
 
 static void handleWiFiConnect(){

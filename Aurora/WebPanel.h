@@ -11,164 +11,721 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
 <meta name="theme-color" content="#0d1117">
 <title>Aurora</title>
 <style>
-*{-webkit-box-sizing:border-box;box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#0d1117;--s1:#161b22;--s2:#21262d;
-  --bd:#30363d;--bd2:#3d444d;
-  --ac:#58a6ff;--ac2:#3fb950;--ac3:#f78166;--ac4:#d29922;--ac5:#bc8cff;
-  --tx:#e6edf3;--mu:#8b949e;
-  --r:10px;--mono:'SFMono-Regular',Consolas,'Liberation Mono',monospace;
-  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
-}
-html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
-body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:14px;line-height:1.5;min-height:100vh;overflow-x:hidden}
+  :root {
+    --bg:       #0a0c10;
+    --surface:  #111318;
+    --border:   #1e2230;
+    --border2:  #2a2f42;
+    --accent:   #4fd1c5;
+    --accent2:  #f6ad55;
+    --accent3:  #fc8181;
+    --text:     #e2e8f0;
+    --muted:    #718096;
+    --green:    #68d391;
+    --red:      #fc8181;
+    --yellow:   #f6e05e;
+    --blue:     #63b3ed;
+    --radius:   12px;
+    --mono:     'Courier New', monospace;
+    --sans:     -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  }
 
-/* ── LOGIN ───────────────────────────────── */
-#ls{position:fixed;inset:0;top:0;right:0;bottom:0;left:0;display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;-webkit-justify-content:center;justify-content:center;background:var(--bg);z-index:200}
-.lc{background:var(--s1);border:1px solid var(--bd);border-radius:16px;padding:40px 32px;width:320px;max-width:92vw;text-align:center}
-.lc .ico{font-size:40px;margin-bottom:16px}
-.lc h1{font-size:22px;font-weight:700;color:var(--tx);margin-bottom:4px}
-.lc p{color:var(--mu);font-size:13px;margin-bottom:24px}
-.lc input{width:100%;background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:12px;color:var(--tx);font-family:var(--mono);font-size:20px;text-align:center;letter-spacing:6px;outline:none;-webkit-transition:border-color .2s;transition:border-color .2s;margin-bottom:12px;-webkit-appearance:none;appearance:none}
-.lc input:focus{border-color:var(--ac)}
-.lc .eb{color:var(--ac3);font-size:12px;min-height:18px;margin-top:8px}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* ── LAYOUT ──────────────────────────────── */
-#app{display:none}
-.topbar{position:-webkit-sticky;position:sticky;top:0;background:rgba(13,17,23,.95);border-bottom:1px solid var(--bd);height:52px;display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;padding:0 16px;gap:10px;z-index:50;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
-.brand{font-size:15px;font-weight:700;color:var(--tx);-webkit-flex:1;flex:1;display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;gap:8px}
-.brand span{color:var(--mu);font-weight:400;font-size:12px}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--ac2);-webkit-animation:pulse 2s infinite;animation:pulse 2s infinite}
-.ttime{font-family:var(--mono);font-size:12px;color:var(--mu)}
-.tbtn{background:none;border:1px solid var(--bd);border-radius:6px;color:var(--mu);font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;font-family:var(--sans)}
-.tbtn:hover{border-color:var(--bd2);color:var(--tx)}
-@-webkit-keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
 
-/* ── NAV ─────────────────────────────────── */
-.nav{display:-webkit-flex;display:flex;border-bottom:1px solid var(--bd);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-.nav::-webkit-scrollbar{display:none}
-.nt{background:none;border:none;border-bottom:2px solid transparent;color:var(--mu);font-family:var(--sans);font-size:13px;font-weight:500;padding:12px 16px;cursor:pointer;white-space:nowrap;-webkit-transition:color .15s,border-color .15s;transition:color .15s,border-color .15s;-webkit-flex-shrink:0;flex-shrink:0}
-.nt:hover{color:var(--tx)}
-.nt.on{color:var(--ac);border-bottom-color:var(--ac)}
+  /* ── GRID BACKGROUND ─────────────────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.4;
+    pointer-events: none;
+    z-index: 0;
+  }
 
-/* ── CONTENT ─────────────────────────────── */
-.wrap{padding:20px;max-width:1100px;margin:0 auto}
-.tp{display:none}.tp.on{display:block}
-.sh{display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;-webkit-justify-content:space-between;justify-content:space-between;margin-bottom:16px;gap:8px;-webkit-flex-wrap:wrap;flex-wrap:wrap}
-.st{font-size:17px;font-weight:600}
+  /* ── LOGIN SCREEN ────────────────────────────────────────── */
+  #loginScreen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    background: var(--bg);
+  }
 
-/* ── CARDS ───────────────────────────────── */
-.card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:16px;margin-bottom:12px}
-.ct{font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--mu);margin-bottom:14px;display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;gap:8px}
-.ct::after{content:'';-webkit-flex:1;flex:1;height:1px;background:var(--bd)}
+  .login-card {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 20px;
+    padding: 48px 40px;
+    width: 360px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
 
-/* ── STAT GRID ───────────────────────────── */
-.sg{display:-webkit-flex;display:flex;-webkit-flex-wrap:wrap;flex-wrap:wrap;gap:8px;margin-bottom:12px}
-.sv{background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:14px;-webkit-flex:1 1 140px;flex:1 1 140px;min-width:120px;position:relative;overflow:hidden}
-.sv::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--ac);opacity:.5}
-.sl{font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--mu);margin-bottom:6px}
-.sn{font-family:var(--mono);font-size:20px;font-weight:600;color:var(--tx);line-height:1}
-.sn.ok{color:var(--ac2)}.sn.warn{color:var(--ac4)}.sn.bad{color:var(--ac3)}
-.su{font-size:11px;color:var(--mu);margin-left:3px}
+  .login-card::before {
+    content: '';
+    position: absolute;
+    top: -60px; left: 50%; transform: translateX(-50%);
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(79,209,197,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
 
-/* ── PROGRESS ────────────────────────────── */
-.pw{margin:8px 0}
-.pl{display:-webkit-flex;display:flex;-webkit-justify-content:space-between;justify-content:space-between;font-size:11px;color:var(--mu);margin-bottom:5px;font-family:var(--mono)}
-.pb{height:5px;background:var(--s2);border-radius:3px;overflow:hidden}
-.pf{height:100%;border-radius:3px;-webkit-transition:width .4s;transition:width .4s;background:var(--ac)}
-.pf.w{background:var(--ac4)}.pf.b{background:var(--ac3)}
+  .login-logo {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 6px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
 
-/* ── INPUTS ──────────────────────────────── */
-.inp{width:100%;background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;color:var(--tx);font-family:var(--mono);font-size:13px;outline:none;-webkit-transition:border-color .2s;transition:border-color .2s;margin-bottom:10px;-webkit-appearance:none;appearance:none}
-.inp:focus{border-color:var(--ac)}
-select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%238b949e' d='M0 0l5 6 5-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:30px}
-textarea.inp{resize:vertical;min-height:100px;font-size:12px;line-height:1.6}
-.fl{font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--mu);margin-bottom:5px}
+  .login-title {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    margin-bottom: 32px;
+  }
 
-/* ── BUTTONS ─────────────────────────────── */
-.btn{display:-webkit-inline-flex;display:inline-flex;-webkit-align-items:center;align-items:center;gap:6px;padding:8px 16px;border-radius:6px;font-family:var(--sans);font-size:12px;font-weight:600;letter-spacing:.5px;cursor:pointer;border:none;-webkit-transition:opacity .15s,background .15s;transition:opacity .15s,background .15s;text-transform:uppercase;white-space:nowrap}
-.btn-p{background:var(--ac);color:#0d1117}.btn-p:hover{opacity:.85}
-.btn-s{background:var(--s2);color:var(--tx);border:1px solid var(--bd)}.btn-s:hover{background:var(--bd)}
-.btn-d{background:rgba(247,129,102,.12);color:var(--ac3);border:1px solid rgba(247,129,102,.25)}.btn-d:hover{background:rgba(247,129,102,.22)}
-.btn-w{background:rgba(210,153,34,.12);color:var(--ac4);border:1px solid rgba(210,153,34,.25)}.btn-w:hover{background:rgba(210,153,34,.22)}
-.btn-g{background:rgba(63,185,80,.12);color:var(--ac2);border:1px solid rgba(63,185,80,.25)}.btn-g:hover{background:rgba(63,185,80,.22)}
-.btn-sm{padding:5px 11px;font-size:11px}
-.btn:disabled{opacity:.35;cursor:not-allowed}
-.br{display:-webkit-flex;display:flex;-webkit-flex-wrap:wrap;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .login-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 18px;
+    text-align: center;
+    letter-spacing: 8px;
+    outline: none;
+    transition: border-color .2s;
+    margin-bottom: 16px;
+  }
 
-/* ── FORM GRID ───────────────────────────── */
-.fg{display:-webkit-flex;display:flex;-webkit-flex-wrap:wrap;flex-wrap:wrap;gap:10px}
-.fg>*{-webkit-flex:1 1 180px;flex:1 1 180px;min-width:0}
+  .login-input:focus { border-color: var(--accent); }
 
-/* ── TOGGLE ──────────────────────────────── */
-.tr{display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;-webkit-justify-content:space-between;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--bd)}
-.tr:last-child{border:none}
-.ti{-webkit-flex:1;flex:1;min-width:0}
-.tn{font-size:13px;font-weight:600;margin-bottom:2px}
-.td{font-size:11px;color:var(--mu);font-family:var(--mono)}
-.tg{position:relative;width:40px;height:22px;-webkit-flex-shrink:0;flex-shrink:0}
-.tg input{opacity:0;width:0;height:0;position:absolute}
-.tslider{position:absolute;top:0;right:0;bottom:0;left:0;background:var(--bd2);border-radius:22px;cursor:pointer;-webkit-transition:background .2s;transition:background .2s}
-.tslider::before{content:'';position:absolute;left:3px;bottom:3px;width:16px;height:16px;background:#fff;border-radius:50%;-webkit-transition:-webkit-transform .2s;transition:transform .2s}
-.tg input:checked+.tslider{background:var(--ac2)}
-.tg input:checked+.tslider::before{-webkit-transform:translateX(18px);transform:translateX(18px)}
+  .login-btn {
+    width: 100%;
+    background: var(--accent);
+    color: #0a0c10;
+    border: none;
+    border-radius: var(--radius);
+    padding: 14px;
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity .2s, transform .1s;
+  }
+  .login-btn:hover { opacity: .85; }
+  .login-btn:active { transform: scale(.98); }
 
-/* ── FILE TREE ───────────────────────────── */
-.ft{font-family:var(--mono);font-size:12px}
-.fd,.fe{padding:8px 10px;border-radius:6px;cursor:pointer;display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;gap:6px;-webkit-transition:background .1s;transition:background .1s}
-.fd{color:var(--ac)}.fd:hover,.fe:hover{background:var(--s2)}
-.fe{padding-left:28px;color:var(--tx);-webkit-justify-content:space-between;justify-content:space-between}
-.fa{display:-webkit-flex;display:flex;gap:4px;opacity:0;-webkit-transition:opacity .1s;transition:opacity .1s}
-.fe:hover .fa{opacity:1}
-@media(hover:none){.fa{opacity:1}}
-.fb{padding:3px 8px;border-radius:4px;border:1px solid var(--bd);background:none;color:var(--mu);font-size:11px;cursor:pointer;font-family:var(--mono)}
-.fb:hover{color:var(--ac);border-color:var(--ac)}
-.fb.del:hover{color:var(--ac3);border-color:var(--ac3)}
-.fsz{color:var(--mu);font-size:11px;margin-left:auto;margin-right:8px}
+  .login-error {
+    color: var(--red);
+    font-size: 13px;
+    margin-top: 12px;
+    min-height: 18px;
+    font-family: var(--mono);
+  }
 
-/* ── WEATHER ─────────────────────────────── */
-.wg{display:-webkit-flex;display:flex;-webkit-flex-wrap:wrap;flex-wrap:wrap;gap:8px;margin-top:10px}
-.wc{background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:12px;text-align:center;-webkit-flex:1 1 90px;flex:1 1 90px;min-width:80px}
-.wh{font-size:11px;color:var(--mu);margin-bottom:4px;font-family:var(--mono)}
-.wt{font-size:20px;font-weight:700;font-family:var(--mono)}
-.wr{font-size:12px;color:var(--ac);margin-top:4px;font-family:var(--mono)}
+  /* ── MAIN LAYOUT ─────────────────────────────────────────── */
+  #app { display: none; position: relative; z-index: 1; }
 
-/* ── MODAL ───────────────────────────────── */
-.mo{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.7);z-index:300;display:none;-webkit-align-items:center;align-items:center;-webkit-justify-content:center;justify-content:center;padding:16px}
-.mo.on{display:-webkit-flex;display:flex}
-.md{background:var(--s1);border:1px solid var(--bd);border-radius:14px;width:100%;max-width:680px;max-height:88vh;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column;overflow:hidden}
-.mh{padding:14px 16px;border-bottom:1px solid var(--bd);display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;gap:10px}
-.mt{font-family:var(--mono);font-size:12px;-webkit-flex:1;flex:1;color:var(--ac)}
-.mb{-webkit-flex:1;flex:1;overflow:auto;padding:14px;-webkit-overflow-scrolling:touch}
-.mb textarea{width:100%;min-height:260px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;color:var(--tx);font-family:var(--mono);font-size:12px;line-height:1.6;padding:12px;resize:none;outline:none;-webkit-appearance:none;appearance:none}
-.mf{padding:10px 16px;border-top:1px solid var(--bd);display:-webkit-flex;display:flex;-webkit-justify-content:flex-end;justify-content:flex-end;gap:8px}
+  /* ── TOPBAR ───────────────────────────────────────────────── */
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(10,12,16,0.92);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
 
-/* ── LOG BOX ─────────────────────────────── */
-.lb{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:12px;font-family:var(--mono);font-size:11px;line-height:1.8;max-height:240px;overflow-y:auto;color:var(--tx);-webkit-overflow-scrolling:touch}
-.ll{display:block}.ll.e{color:var(--ac3)}.ll.w{color:var(--ac4)}.ll.k{color:var(--ac2)}
+  .topbar-brand {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 5px;
+    color: var(--accent);
+    text-transform: uppercase;
+    flex: 1;
+  }
 
-/* ── ALERT BANNER ────────────────────────── */
-.ab{background:rgba(247,129,102,.08);border:1px solid rgba(247,129,102,.3);border-radius:var(--r);padding:12px 14px;font-family:var(--mono);font-size:12px;line-height:1.6;color:var(--ac3);display:none}
+  .topbar-brand span { color: var(--muted); font-weight: 400; }
 
-/* ── INFO GRID ───────────────────────────── */
-.ig{font-family:var(--mono);font-size:12px;line-height:2}
-.ig .k{color:var(--mu)}.ig .v{color:var(--tx)}.ig .va{color:var(--ac)}
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s infinite;
+  }
 
-/* ── TOAST ───────────────────────────────── */
-#toast{position:fixed;bottom:16px;right:16px;z-index:999;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column;gap:6px;max-width:calc(100vw - 32px);pointer-events:none}
-.ti2{background:var(--s1);border:1px solid var(--bd);border-radius:8px;padding:10px 14px;font-size:12px;pointer-events:all;-webkit-animation:sli .2s;animation:sli .2s}
-.ti2.s{border-left:3px solid var(--ac2)}.ti2.e{border-left:3px solid var(--ac3)}.ti2.i{border-left:3px solid var(--ac)}.ti2.w{border-left:3px solid var(--ac4)}
-@-webkit-keyframes sli{from{-webkit-transform:translateX(40px);opacity:0}to{-webkit-transform:none;opacity:1}}
-@keyframes sli{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .4; }
+  }
 
-/* ── SCROLLBAR ───────────────────────────── */
-::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-track{background:var(--bg)}
-::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:2px}
+  .topbar-time {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+  }
 
-/* ── RESPONSIVE ──────────────────────────── */
-@media(max-width:480px){.wrap{padding:12px}.topbar{padding:0 12px}.sv{-webkit-flex-basis:calc(50% - 4px);flex-basis:calc(50% - 4px)}}
+  .logout-btn {
+    background: none;
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    padding: 6px 14px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all .2s;
+  }
+  .logout-btn:hover { border-color: var(--red); color: var(--red); }
+
+  /* ── NAV TABS ─────────────────────────────────────────────── */
+  .nav {
+    display: flex;
+    gap: 2px;
+    padding: 12px 24px 0;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+
+  .nav-tab {
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .5px;
+    color: var(--muted);
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-bottom: 2px solid transparent;
+    transition: all .2s;
+    white-space: nowrap;
+    font-family: var(--sans);
+    text-transform: uppercase;
+  }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── CONTENT ──────────────────────────────────────────────── */
+  .content {
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── CARDS ────────────────────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .card-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── STAT GRID ────────────────────────────────────────────── */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .stat {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat::before {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    opacity: .4;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .stat-value.ok  { color: var(--green); }
+  .stat-value.warn { color: var(--yellow); }
+  .stat-value.bad  { color: var(--red); }
+  .stat-unit { font-size: 13px; color: var(--muted); margin-left: 4px; }
+
+  /* ── PROGRESS BAR ─────────────────────────────────────────── */
+  .progress-wrap { margin: 8px 0; }
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-family: var(--mono);
+  }
+  .progress-bar {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width .4s ease;
+    background: var(--accent);
+  }
+  .progress-fill.warn { background: var(--yellow); }
+  .progress-fill.bad  { background: var(--red); }
+
+  /* ── INPUT / TEXTAREA ─────────────────────────────────────── */
+  .inp {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    outline: none;
+    transition: border-color .2s;
+    margin-bottom: 12px;
+  }
+  .inp:focus { border-color: var(--accent); }
+
+  textarea.inp {
+    resize: vertical;
+    min-height: 120px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  /* ── BUTTONS ──────────────────────────────────────────────── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: none;
+    transition: all .2s;
+  }
+  .btn-primary { background: var(--accent); color: #0a0c10; }
+  .btn-primary:hover { opacity: .85; }
+  .btn-secondary { background: var(--border2); color: var(--text); }
+  .btn-secondary:hover { background: var(--border); }
+  .btn-danger { background: rgba(252,129,129,.15); color: var(--red); border: 1px solid rgba(252,129,129,.3); }
+  .btn-danger:hover { background: rgba(252,129,129,.25); }
+  .btn-warn { background: rgba(246,173,85,.15); color: var(--accent2); border: 1px solid rgba(246,173,85,.3); }
+  .btn-warn:hover { background: rgba(246,173,85,.25); }
+  .btn-sm { padding: 6px 14px; font-size: 11px; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .preset-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .preset-btn {
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    padding: 7px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: var(--mono);
+  }
+  .preset-dot{
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+    border: 1px solid rgba(255,255,255,.25);
+    vertical-align: -2px;
+  }
+
+  /* ── FORM ROW ─────────────────────────────────────────────── */
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media(max-width:600px){ .form-row { grid-template-columns: 1fr; } }
+
+  .form-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  /* ── FILE EXPLORER ────────────────────────────────────────── */
+  .file-tree { font-family: var(--mono); font-size: 13px; }
+
+  .file-dir {
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    border-radius: 6px;
+    color: var(--accent);
+    font-weight: 500;
+    transition: background .15s;
+  }
+  .file-dir:hover { background: var(--border); }
+
+  .file-entry {
+    padding: 7px 12px 7px 36px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    border-radius: 6px;
+    color: var(--text);
+    transition: background .15s;
+    justify-content: space-between;
+  }
+  .file-entry:hover { background: var(--border); }
+
+  .file-name { flex: 1; }
+  .file-size { color: var(--muted); font-size: 11px; }
+
+  .file-actions { display: flex; gap: 6px; opacity: 0; transition: opacity .15s; }
+  .file-entry:hover .file-actions { opacity: 1; }
+
+  .file-btn {
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    background: none;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: all .15s;
+  }
+  .file-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .file-btn.del:hover { color: var(--red); border-color: var(--red); }
+
+  /* ── EDITOR MODAL ─────────────────────────────────────────── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.7);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 700px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .modal-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .modal-title {
+    font-family: var(--mono);
+    font-size: 13px;
+    flex: 1;
+    color: var(--accent);
+  }
+
+  .modal-body { flex: 1; overflow: auto; padding: 16px; }
+
+  .modal textarea {
+    width: 100%;
+    height: 100%;
+    min-height: 300px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 14px;
+    resize: none;
+    outline: none;
+  }
+
+  .modal-footer {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  /* ── TOAST ────────────────────────────────────────────────── */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+  }
+
+  .toast-item {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: 12px 18px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: slideIn .25s ease;
+    pointer-events: all;
+  }
+  .toast-item.success { border-left: 3px solid var(--green); }
+  .toast-item.error   { border-left: 3px solid var(--red); }
+  .toast-item.info    { border-left: 3px solid var(--accent); }
+
+  @keyframes slideIn {
+    from { transform: translateX(60px); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+  }
+
+  /* ── LOG VIEWER ───────────────────────────────────────────── */
+  .log-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    max-height: 300px;
+    overflow-y: auto;
+    color: var(--text);
+  }
+
+  .log-line { display: block; }
+  .log-line.err  { color: var(--red); }
+  .log-line.warn { color: var(--yellow); }
+  .log-line.ok   { color: var(--green); }
+
+  /* ── SECTION DIVIDER ──────────────────────────────────────── */
+  .section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    gap: 12px;
+  }
+  .section-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+
+  /* ── TOGGLE ───────────────────────────────────────────────── */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-info { flex: 1; }
+  .toggle-name { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+  .toggle-desc { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+  .toggle {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border2);
+    border-radius: 24px;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .slider::before {
+    content: '';
+    position: absolute;
+    left: 3px; bottom: 3px;
+    width: 18px; height: 18px;
+    background: white;
+    border-radius: 50%;
+    transition: transform .2s;
+  }
+  .toggle input:checked + .slider { background: var(--accent); }
+  .toggle input:checked + .slider::before { transform: translateX(20px); }
+
+  /* ── MINI CHART ───────────────────────────────────────────── */
+  .chart-wrap {
+    position: relative;
+    height: 80px;
+    margin: 8px 0;
+  }
+
+  canvas.sparkline {
+    width: 100%;
+    height: 80px;
+  }
+
+  /* ── WEATHER GRID ─────────────────────────────────────────── */
+  .weather-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .weather-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    text-align: center;
+  }
+
+  .weather-hour { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-family: var(--mono); }
+  .weather-temp { font-size: 20px; font-weight: 700; font-family: var(--mono); }
+  .weather-rain { font-size: 12px; color: var(--blue); margin-top: 4px; font-family: var(--mono); }
+
+  /* ── SCROLLBAR ────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  /* ── RESPONSIVE ───────────────────────────────────────────── */
+  @media(max-width:480px){
+    .stat-grid { grid-template-columns: 1fr 1fr; }
+    .weather-grid { grid-template-columns: 1fr; }
+    .content { padding: 16px; }
+    .topbar { padding: 0 16px; }
+    .login-card { width: 95%; padding: 28px 20px; }
+    .login-title { font-size: 24px; }
+    .login-input { letter-spacing: 4px; }
+  }
+  @media(max-width:900px){
+    .stat-grid { grid-template-columns: 1fr; }
+    .weather-grid { grid-template-columns: 1fr; }
+    .form-row { grid-template-columns: 1fr; }
+    .card { padding: 14px; }
+    .nav-tab { padding: 10px 12px; font-size: 12px; }
+  }
+  @media(max-width:1024px){
+    body::before { display: none; }
+  }
+
+  /* ── ANIMATIONS ───────────────────────────────────────────── */
+  .fade-in { animation: fadeIn .3s ease; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--border2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -196,15 +753,34 @@ textarea.inp{resize:vertical;min-height:100px;font-size:12px;line-height:1.6}
   <button class="tbtn" onclick="doLogout()">Sair</button>
 </div>
 
-<div class="nav">
-  <button class="nt on" onclick="showTab('dash',this)">Dashboard</button>
-  <button class="nt" onclick="showTab('clima',this)">Clima</button>
-  <button class="nt" onclick="showTab('sd',this)">SD Card</button>
-  <button class="nt" onclick="showTab('cfg',this)">Config</button>
-  <button class="nt" onclick="showTab('ctrl',this)">Controle</button>
-</div>
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-brand">AURORA <span>· ESP32-S3</span></div>
+    <div class="status-dot" id="connDot" title="Conexão"></div>
+    <div class="topbar-time" id="topTime">--:--</div>
+    <button class="logout-btn" id="perfBtn" onclick="toggleModoLeve()">Modo Leve: ON</button>
+    <button class="logout-btn" onclick="doLogout()">Sair</button>
+  </div>
 
-<div class="wrap">
+  <!-- NAV TABS -->
+  <div class="nav">
+    <button class="nav-tab active" onclick="showTab('dashboard', this)">Dashboard</button>
+    <button class="nav-tab" onclick="showTab('clima', this)">Clima</button>
+    <button class="nav-tab" onclick="showTab('sdcard', this)">SD Card</button>
+    <button class="nav-tab" onclick="showTab('config', this)">Configurações</button>
+    <button class="nav-tab" onclick="showTab('controle', this)">Controle</button>
+  </div>
+
+  <!-- ═══════════════ DASHBOARD ══════════════════════════ -->
+  <div class="content">
+  <div id="tab-dashboard" class="tab-panel active fade-in">
+
+    <div class="section-head">
+      <div class="section-title">Visão Geral</div>
+      <button class="btn btn-secondary btn-sm" onclick="refreshDash()">
+        <span id="refreshIcon">Atualizar</span>
+      </button>
+    </div>
 
 <!-- DASHBOARD -->
 <div id="tab-dash" class="tp on">
@@ -266,25 +842,13 @@ textarea.inp{resize:vertical;min-height:100px;font-size:12px;line-height:1.6}
   <div class="ab" id="alerb"><strong>⚠ Alerta ativo</strong><br><span id="alerm"></span></div>
 </div>
 
-<!-- SD CARD -->
-<div id="tab-sd" class="tp">
-  <div class="sh">
-    <div class="st">Gerenciador SD</div>
-    <button class="btn btn-s btn-sm" onclick="loadFiles('/aurora')">↻ Recarregar</button>
-  </div>
-  <div class="card">
-    <div class="ct">Arquivos</div>
-    <div id="ftree" class="ft"><span style="color:var(--mu)">Carregando...</span></div>
-  </div>
-  <div class="card">
-    <div class="ct">Novo Arquivo</div>
-    <div class="fl">Caminho</div>
-    <input class="inp" id="nfp" placeholder="/aurora/agenda/nota.txt">
-    <div class="fl">Conteúdo</div>
-    <textarea class="inp" id="nfc" placeholder="Conteúdo..." style="min-height:70px"></textarea>
-    <button class="btn btn-p" onclick="criarArq()">Criar</button>
-  </div>
-</div>
+  <!-- ═══════════════ CLIMA ═══════════════════════════════ -->
+  <div id="tab-clima" class="tab-panel fade-in">
+
+    <div class="section-head">
+      <div class="section-title">Clima &amp; Previsão</div>
+      <button class="btn btn-secondary btn-sm" onclick="atualizarClima()">Atualizar clima</button>
+    </div>
 
 <!-- CONFIG -->
 <div id="tab-cfg" class="tp">
@@ -303,12 +867,40 @@ textarea.inp{resize:vertical;min-height:100px;font-size:12px;line-height:1.6}
         <input class="inp" id="cfcid" placeholder="Muriae,BR">
       </div>
     </div>
-    <button class="btn btn-p" onclick="salvCfg()">Salvar</button>
+
+    <div class="card" id="alertaCard" style="display:none;border-color:rgba(252,129,129,.4)">
+      <div class="card-title" style="color:var(--red)">Alerta Ativo</div>
+      <div id="alertaMsg" style="font-family:var(--mono);font-size:13px;line-height:1.6;color:var(--red)"></div>
+    </div>
+
   </div>
-  <div class="card">
-    <div class="ct">Personalidade da IA</div>
-    <textarea class="inp" id="cfpers" placeholder="Carregando..." style="min-height:130px"></textarea>
-    <button class="btn btn-p" onclick="salvPers()">Salvar Personalidade</button>
+
+  <!-- ═══════════════ SD CARD ═════════════════════════════ -->
+  <div id="tab-sdcard" class="tab-panel fade-in">
+
+    <div class="section-head">
+      <div class="section-title">Gerenciador SD</div>
+      <button class="btn btn-secondary btn-sm" onclick="loadFiles('/')">Recarregar</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Explorador de Arquivos</div>
+      <div id="fileTree" class="file-tree">
+        <div style="color:var(--muted);font-family:var(--mono);font-size:13px;padding:12px">
+          Carregando...
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Criar Novo Arquivo</div>
+      <div class="form-label">Caminho completo</div>
+      <input class="inp" id="newFilePath" placeholder="/aurora/agenda/nota.txt">
+      <div class="form-label">Conteúdo</div>
+      <textarea class="inp" id="newFileContent" placeholder="Conteúdo do arquivo..." style="min-height:80px"></textarea>
+      <button class="btn btn-primary" onclick="criarArquivo()">Criar Arquivo</button>
+    </div>
+
   </div>
   <div class="card">
     <div class="ct">Funções</div>
@@ -337,32 +929,141 @@ textarea.inp{resize:vertical;min-height:100px;font-size:12px;line-height:1.6}
     <div class="br" style="margin-bottom:10px">
       <button class="btn btn-s btn-sm" onclick="scanWifi()">Escanear redes</button>
     </div>
-    <div class="fg">
-      <div><div class="fl">Rede disponível</div><select class="inp" id="wscan"><option value="">-- selecione --</option></select></div>
-      <div><div class="fl">SSID manual</div><input class="inp" id="wssid" placeholder="Nome da rede"></div>
+
+    <div class="card">
+      <div class="card-title">Funções do Sistema</div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">LED NeoPixel</div>
+          <div class="toggle-desc">Indicador visual de estado do sistema</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="togLED" checked onchange="toggleFunc('led', this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">OLED Display</div>
+          <div class="toggle-desc">Exibição de dados no display físico</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="togOLED" checked onchange="toggleFunc('oled', this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">Alertas Climáticos</div>
+          <div class="toggle-desc">Notificações Telegram de clima severo</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="togAlertas" checked onchange="toggleFunc('alertas', this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">Modo Noturno</div>
+          <div class="toggle-desc">Silencia Telegram no intervalo configurado abaixo</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="togNoturno" checked onchange="toggleFunc('noturno', this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="form-row" style="margin-top:12px">
+        <div>
+          <div class="form-label">Início do modo noturno</div>
+          <select class="inp" id="cfgNoturnoInicio"></select>
+        </div>
+        <div>
+          <div class="form-label">Fim do modo noturno</div>
+          <select class="inp" id="cfgNoturnoFim"></select>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="salvarHorarioNoturno()">Salvar Horário Noturno</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">LED por Estado (cor + efeito)</div>
+      <div id="ledStatesBox"></div>
+      <button class="btn btn-primary" onclick="salvarCoresLED()">Salvar Cores do LED</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Wi-Fi (AP por duplo clique no botão WEB)</div>
+      <div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:10px" id="wifiStateInfo">Carregando estado de rede...</div>
+      <div class="btn-row" style="margin-bottom:10px">
+        <button class="btn btn-secondary btn-sm" onclick="scanWiFi()">Escanear redes</button>
+      </div>
+      <div class="form-row">
+        <div>
+          <div class="form-label">Rede disponível</div>
+          <select class="inp" id="wifiScanList"><option value="">-- selecione --</option></select>
+        </div>
+        <div>
+          <div class="form-label">Ou SSID manual</div>
+          <input class="inp" id="wifiSsid" placeholder="Nome da rede">
+        </div>
+      </div>
+      <div>
+        <div class="form-label">Senha</div>
+        <input class="inp" id="wifiPass" type="password" placeholder="Senha da rede">
+      </div>
+      <button class="btn btn-primary" onclick="conectarNovoWiFi()">Conectar neste Wi-Fi</button>
     </div>
     <div class="fl">Senha</div><input class="inp" id="wpass" type="password" placeholder="Senha">
     <button class="btn btn-p" onclick="conWifi()">Conectar</button>
   </div>
 </div>
 
-<!-- CONTROLE -->
-<div id="tab-ctrl" class="tp">
-  <div class="st" style="margin-bottom:16px">Controle</div>
-  <div class="card">
-    <div class="ct">Ações</div>
-    <div class="br">
-      <button class="btn btn-w" onclick="conf('Reiniciar ESP32?',cmdRst)">↺ Reiniciar</button>
-      <button class="btn btn-s" onclick="cmdOTA()">📡 OTA</button>
-      <button class="btn btn-s" onclick="cmdRel()">📊 Relatório</button>
+  <!-- ═══════════════ CONTROLE ════════════════════════════ -->
+  <div id="tab-controle" class="tab-panel fade-in">
+
+    <div class="section-title" style="margin-bottom:20px">Painel de Controle</div>
+
+    <div class="card">
+      <div class="card-title">Ações do Sistema</div>
+      <div class="btn-row">
+        <button class="btn btn-warn" onclick="confirmar('Reiniciar ESP32?', cmdReset)">
+          Reiniciar
+        </button>
+        <button class="btn btn-secondary" onclick="cmdOTA()">
+          Ativar OTA
+        </button>
+        <button class="btn btn-secondary" onclick="cmdRelatorio()">
+          Gerar Relatório
+        </button>
+      </div>
     </div>
-  </div>
-  <div class="card">
-    <div class="ct">Limpeza</div>
-    <div class="br">
-      <button class="btn btn-d btn-sm" onclick="conf('Apagar histórico IA?',cmdIA)">Histórico IA</button>
-      <button class="btn btn-d btn-sm" onclick="conf('Apagar logs?',cmdLogs)">Logs SD</button>
-      <button class="btn btn-d btn-sm" onclick="conf('Apagar memória?',cmdMem)">Memória</button>
+
+    <div class="card">
+      <div class="card-title">Limpeza de Dados</div>
+      <div class="btn-row">
+        <button class="btn btn-danger btn-sm" onclick="confirmar('Apagar histórico da IA?', cmdLimparIA)">
+          Histórico IA
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="confirmar('Apagar todos os logs?', cmdLimparLogs)">
+          Logs SD
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="confirmar('Apagar memória de perguntas?', cmdLimparMem)">
+          Memória Perguntas
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Console Serial (últimas linhas)</div>
+      <div class="log-box" id="logBox">
+        <span class="log-line ok">Sistema pronto.</span>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary btn-sm" onclick="fetchLog()">Atualizar</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('logBox').innerHTML=''">Limpar</button>
+      </div>
     </div>
   </div>
   <div class="card">
@@ -382,15 +1083,20 @@ textarea.inp{resize:vertical;min-height:100px;font-size:12px;line-height:1.6}
 </div><!-- /wrap -->
 </div><!-- /app -->
 
-<!-- MODAL EDITOR -->
-<div class="mo" id="emod">
-<div class="md">
-  <div class="mh"><div class="mt" id="etit">/aurora/config/arquivo.txt</div>
-    <button class="btn btn-s btn-sm" onclick="closeEd()">✕</button></div>
-  <div class="mb"><textarea id="eare" spellcheck="false"></textarea></div>
-  <div class="mf">
-    <button class="btn btn-d btn-sm" onclick="delCur()">Deletar</button>
-    <button class="btn btn-p" onclick="salvEd()">Salvar</button>
+<!-- ════════════════ EDITOR MODAL ════════════════════════ -->
+<div class="modal-overlay" id="editorModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="editorTitle">/aurora/config/arquivo.txt</div>
+      <button class="btn btn-secondary btn-sm" onclick="closeEditor()">Fechar</button>
+    </div>
+    <div class="modal-body">
+      <textarea id="editorArea" spellcheck="false"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" onclick="deletarArquivoAtual()">Deletar</button>
+      <button class="btn btn-primary" onclick="salvarArquivoEditor()">Salvar</button>
+    </div>
   </div>
 </div>
 </div>
@@ -398,367 +1104,636 @@ textarea.inp{resize:vertical;min-height:100px;font-size:12px;line-height:1.6}
 <div id="toast"></div>
 
 <script>
-var LI=false, CF='', RT=null, CK=null, AT='dash', ML=true;
-var AL={wifi:'WiFi',idle:'Idle',processing:'IA',success:'Sucesso',error:'Erro'};
-var CL=[{id:'vermelho',n:'Vermelho',h:'#ff3333'},{id:'verde',n:'Verde',h:'#3fb950'},
-        {id:'azul',n:'Azul',h:'#58a6ff'},{id:'amarelo',n:'Amarelo',h:'#d29922'},
-        {id:'laranja',n:'Laranja',h:'#ff8c00'},{id:'roxo',n:'Roxo',h:'#bc8cff'},
-        {id:'rosa',n:'Rosa',h:'#ff69b4'},{id:'ciano',n:'Ciano',h:'#39d0d0'},
-        {id:'branco',n:'Branco',h:'#ffffff'}];
-var EF=[{id:'respiracao',n:'Respiração'},{id:'strobo_rapido',n:'Strobo rápido'},
-        {id:'strobo_medio',n:'Strobo médio'},{id:'arco-iris',n:'Arco-íris'}];
-var PC={s:null,c:null,g:null}, PT={s:0,c:0,g:0}, PL={s:6000,c:20000,g:30000};
+var loggedIn = false;
+var currentFile = '';
+var refreshTimer = null;
+var clockTimer = null;
+var abaAtual = 'dashboard';
+var modoLeve = true;
+var abasCarregadas = {clima:false, sdcard:false, config:false, controle:false};
+var ESTADOS_LED = ['wifi','idle','processing','success','error'];
+var NOME_ESTADO = {wifi:'WiFi conectando', idle:'Modo idle', processing:'Processando IA', success:'Sucesso', error:'Erro'};
+var CORES_LED = [
+  {id:'vermelho', nome:'Vermelho', hex:'#ff0000'},
+  {id:'verde', nome:'Verde', hex:'#00b400'},
+  {id:'azul', nome:'Azul', hex:'#0050ff'},
+  {id:'amarelo', nome:'Amarelo', hex:'#ffd000'},
+  {id:'laranja', nome:'Laranja', hex:'#ff7800'},
+  {id:'roxo', nome:'Roxo', hex:'#7a2fff'},
+  {id:'rosa', nome:'Rosa', hex:'#ff4fb8'},
+  {id:'ciano', nome:'Ciano', hex:'#00d6d6'},
+  {id:'branco', nome:'Branco', hex:'#ffffff'},
+  {id:'gelo', nome:'Gelo', hex:'#b4f0ff'},
+  {id:'lime', nome:'Lima', hex:'#99ff00'},
+  {id:'amber', nome:'Âmbar', hex:'#ffb347'}
+];
+var EFEITOS_LED = [
+  {id:'arco-iris', nome:'Arco-íris'},
+  {id:'strobo_rapido', nome:'Strobo rápido'},
+  {id:'strobo_medio', nome:'Strobo médio'},
+  {id:'strobo_devagar', nome:'Strobo devagar'},
+  {id:'respiracao', nome:'Respiração'}
+];
+var cachePainel = {status:null, clima:null, config:null};
+var cacheTs = {status:0, clima:0, config:0};
+var cacheTTL = {status:6000, clima:20000, config:30000};
 
-function req(u,o,cb){
-  o=o||{};cb=cb||function(){};
-  var x=new XMLHttpRequest();
-  x.open(o.m||'GET',u,true);x.timeout=12000;
-  x.setRequestHeader('Accept','application/json');
-  if(o.h)for(var k in o.h)if(o.h.hasOwnProperty(k))x.setRequestHeader(k,o.h[k]);
-  x.onreadystatechange=function(){
-    if(x.readyState!==4)return;
-    if(x.status===401){doLogout();cb(null);return;}
-    if(x.status<200||x.status>=300){cb(null);return;}
-    try{cb(JSON.parse(x.responseText));}catch(e){cb(null);}
+function request(path, opts, cb){
+  opts = opts || {};
+  cb = cb || function(){};
+  var xhr = new XMLHttpRequest();
+  xhr.open(opts.method || 'GET', path, true);
+  xhr.timeout = 12000;
+  xhr.setRequestHeader('Accept', 'application/json');
+  if(opts.headers){
+    for(var k in opts.headers){ if(opts.headers.hasOwnProperty(k)) xhr.setRequestHeader(k, opts.headers[k]); }
+  }
+  xhr.onreadystatechange = function(){
+    if(xhr.readyState !== 4) return;
+    if(xhr.status === 401){ doLogout(); cb(null); return; }
+    if(xhr.status < 200 || xhr.status >= 300){ cb(null); return; }
+    try { cb(JSON.parse(xhr.responseText)); }
+    catch(e){ cb(null); }
   };
-  x.onerror=x.ontimeout=function(){cb(null);};
-  x.send(o.b||null);
+  xhr.onerror = function(){ cb(null); };
+  xhr.ontimeout = function(){ cb(null); };
+  xhr.send(opts.body || null);
 }
 
 function doLogin(){
-  var p=document.getElementById('lpin').value;
-  req('/api/login',{m:'POST',h:{'Content-Type':'application/json'},b:JSON.stringify({pin:p})},function(d){
-    if(d&&d.ok){LI=true;document.getElementById('ls').style.display='none';
-      document.getElementById('app').style.display='block';startApp();}
-    else{document.getElementById('lerr').textContent='Senha incorreta.';
-      document.getElementById('lpin').value='';}
+  var pin = document.getElementById('loginPin').value;
+  request('/api/login', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({pin: pin})
+  }, function(d){
+    if(d && d.ok){
+      loggedIn = true;
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      startApp();
+    } else {
+      document.getElementById('loginErr').textContent = 'Senha incorreta.';
+      document.getElementById('loginPin').value = '';
+    }
   });
 }
 function doLogout(){
-  req('/api/logout',{m:'POST'},function(){});LI=false;
-  clearInterval(RT);clearInterval(CK);AT='dash';
-  document.getElementById('app').style.display='none';
-  document.getElementById('ls').style.display='flex';
-  document.getElementById('lpin').value='';
-  document.getElementById('lerr').textContent='';
+  request('/api/logout', {method:'POST'}, function(){});
+  loggedIn = false;
+  clearInterval(refreshTimer);
+  clearInterval(clockTimer);
+  abaAtual = 'dashboard';
+  abasCarregadas = {clima:false, sdcard:false, config:false, controle:false};
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginPin').value = '';
+  document.getElementById('loginErr').textContent = '';
 }
 
 function startApp(){
-  fillHours();buildLED();
-  resetTabs();updML();rdash(1);startRT();
-  clearInterval(CK);
-  CK=setInterval(function(){
-    var d=new Date();
-    document.getElementById('ttm').textContent=p2(d.getHours())+':'+p2(d.getMinutes());
-  },1000);
-}
-function startRT(){
-  clearInterval(RT);
-  RT=setInterval(function(){
-    if(!LI)return;
-    if(AT==='dash')rdash();
-    else if(!ML&&AT==='clima')loadClima(1);
-    else if(!ML&&AT==='ctrl')fetchLog();
-  },ML?25000:12000);
-}
-function updML(){
-  var b=document.getElementById('mlbtn');
-  b.textContent=ML?'Leve':'Detalhado';
-  b.style.color=ML?'var(--ac2)':'var(--ac4)';
-}
-function toggleLeve(){ML=!ML;updML();startRT();if(AT==='dash')rdash(1);}
-function resetTabs(){
-  var ts=document.querySelectorAll('.nt'),ps=document.querySelectorAll('.tp');
-  for(var i=0;i<ts.length;i++)ts[i].className='nt';
-  for(var i=0;i<ps.length;i++)ps[i].style.display='none';
-  if(ts.length)ts[0].className='nt on';
-  var d=document.getElementById('tab-dash');if(d)d.style.display='block';
-}
-function showTab(n,b){
-  AT=n;
-  var ts=document.querySelectorAll('.nt'),ps=document.querySelectorAll('.tp');
-  for(var i=0;i<ts.length;i++)ts[i].className='nt';
-  for(var i=0;i<ps.length;i++)ps[i].style.display='none';
-  var p=document.getElementById('tab-'+n);if(p)p.style.display='block';
-  if(b)b.className='nt on';
-  if(n==='dash')rdash(1);
-  else if(n==='clima')loadClima(1);
-  else if(n==='sd')loadFiles('/aurora');
-  else if(n==='cfg')loadCfg(1);
+  preencherHoras();
+  montarControlesLED();
+  resetarAbas();
+  atualizarBotaoModoLeve();
+  refreshDash(true);
+  iniciarRefreshPainel();
+  clearInterval(clockTimer);
+  clockTimer = setInterval(function(){
+    var n = new Date();
+    document.getElementById('topTime').textContent = pad2(n.getHours()) + ':' + pad2(n.getMinutes());
+  }, 1000);
 }
 
-// DASHBOARD
-function applyDash(d){
-  var t=+(d.chipTemp||0),el=document.getElementById('schip');
-  el.innerHTML=t.toFixed(1)+'<span class="su">°C</span>';
-  el.className='sn'+(t>75?' bad':t>55?' warn':' ok');
-  var h=+(d.heapPct||0),he=document.getElementById('sheap');
-  he.innerHTML=h+'<span class="su">%</span>';
-  he.className='sn'+(h<20?' bad':h<40?' warn':' ok');
-  document.getElementById('hpct').textContent=h+'%';
-  document.getElementById('hbar').style.width=h+'%';
-  var r=+(d.rssi||0),w=+(d.wifiPct||0),we=document.getElementById('swifi');
-  we.innerHTML=r+'<span class="su">dBm</span>';
-  we.className='sn'+(w<30?' bad':w<60?' warn':' ok');
-  document.getElementById('wpct').textContent=w+'%';
-  document.getElementById('wbar').style.width=w+'%';
-  document.getElementById('sut').textContent=d.uptime||'--';
-  document.getElementById('sqst').textContent=d.questions||'0';
-  document.getElementById('scli').innerHTML=+(d.climaTemp||0).toFixed(1)+'<span class="su">°C</span>';
-  document.getElementById('iip').textContent=d.ip||'--';
-  document.getElementById('issid').textContent=d.ssid||'--';
-  document.getElementById('imod').textContent=d.modelo||'--';
-  document.getElementById('icid').textContent=d.cidade||'--';
-  document.getElementById('isd').textContent=d.sdOK?'OK':'Falha';
-  document.getElementById('iota').textContent=d.otaAtivo?'Ativo':'Inativo';
+function iniciarRefreshPainel(){
+  clearInterval(refreshTimer);
+  refreshTimer = setInterval(function(){
+    if(!loggedIn) return;
+    if(abaAtual === 'dashboard'){
+      refreshDash();
+      return;
+    }
+    if(!modoLeve && abaAtual === 'clima'){
+      loadClima(true);
+      return;
+    }
+    if(!modoLeve && abaAtual === 'controle'){
+      fetchLog();
+    }
+  }, modoLeve ? 25000 : 12000);
 }
-function rdash(f){
-  f=!!f;var ic=document.getElementById('rico');
-  if(!f&&PC.s&&(Date.now()-PT.s)<PL.s){applyDash(PC.s);return;}
-  ic.textContent='…';
-  req('/api/status',{},function(d){
-    ic.textContent='↻';if(!d)return;
-    PC.s=d;PT.s=Date.now();applyDash(d);
+
+function atualizarBotaoModoLeve(){
+  var btn = document.getElementById('perfBtn');
+  if(!btn) return;
+  btn.textContent = modoLeve ? 'Modo Leve: ON' : 'Modo Leve: OFF';
+  btn.style.borderColor = modoLeve ? 'var(--green)' : 'var(--accent2)';
+  btn.style.color = modoLeve ? 'var(--green)' : 'var(--accent2)';
+}
+
+function toggleModoLeve(){
+  modoLeve = !modoLeve;
+  atualizarBotaoModoLeve();
+  iniciarRefreshPainel();
+  toast(modoLeve ? 'Modo leve ativado: menos carga no ESP32.' : 'Modo leve desativado: painel completo.', 'info');
+  if(abaAtual === 'dashboard') refreshDash(true);
+}
+
+function resetarAbas(){
+  var tabs = document.querySelectorAll('.nav-tab');
+  for(var i=0; i<tabs.length; i++) tabs[i].className = tabs[i].className.replace(' active', '');
+  if(tabs.length) tabs[0].className += ' active';
+  var panels = document.querySelectorAll('.tab-panel');
+  for(var j=0; j<panels.length; j++) panels[j].style.display = 'none';
+  var dash = document.getElementById('tab-dashboard');
+  if(dash) dash.style.display = 'block';
+}
+
+function showTab(name, btn){
+  abaAtual = name;
+  var i;
+  var panels = document.querySelectorAll('.tab-panel');
+  for(i=0;i<panels.length;i++) panels[i].style.display = 'none';
+  var tabs = document.querySelectorAll('.nav-tab');
+  for(i=0;i<tabs.length;i++) tabs[i].className = tabs[i].className.replace(' active', '');
+  var tab = document.getElementById('tab-' + name);
+  if(tab) tab.style.display = 'block';
+  if(btn) btn.className += ' active';
+  if(name==='dashboard'){ refreshDash(true); return; }
+  if(name==='clima'){
+    if(!abasCarregadas.clima || !modoLeve){
+      loadClima(true);
+      abasCarregadas.clima = true;
+    }
+    return;
+  }
+  if(name==='sdcard'){
+    if(!abasCarregadas.sdcard){
+      loadFiles('/aurora');
+      abasCarregadas.sdcard = true;
+    }
+    return;
+  }
+  if(name==='config'){
+    if(!abasCarregadas.config || !modoLeve){
+      loadConfig(true);
+      abasCarregadas.config = true;
+    }
+    return;
+  }
+  if(name==='controle'){
+    if(!modoLeve) fetchLog();
+    abasCarregadas.controle = true;
+  }
+}
+
+function aplicarStatusDashboard(d){
+    var t = Number(d.chipTemp || 0);
+    var tEl = document.getElementById('statChipTemp');
+    tEl.innerHTML = t.toFixed(1) + '<span class="stat-unit">°C</span>';
+    tEl.className = 'stat-value' + (t > 75 ? ' bad' : t > 55 ? ' warn' : ' ok');
+
+    var hp = Number(d.heapPct || 0);
+    var hEl = document.getElementById('statHeap');
+    hEl.innerHTML = hp + '<span class="stat-unit">%</span>';
+    hEl.className = 'stat-value' + (hp < 20 ? ' bad' : hp < 40 ? ' warn' : ' ok');
+    document.getElementById('heapPct').textContent = hp + '%';
+    var hBar = document.getElementById('heapBar');
+    hBar.style.width = hp + '%';
+
+    var rssi = Number(d.rssi || 0);
+    var wp = Number(d.wifiPct || 0);
+    var wEl = document.getElementById('statWifi');
+    wEl.innerHTML = rssi + '<span class="stat-unit">dBm</span>';
+    wEl.className = 'stat-value' + (wp < 30 ? ' bad' : wp < 60 ? ' warn' : ' ok');
+    document.getElementById('wifiPct').textContent = wp + '%';
+    var wBar = document.getElementById('wifiBar');
+    wBar.style.width = wp + '%';
+
+    document.getElementById('statUptime').textContent = d.uptime || '--';
+    document.getElementById('statQuestions').textContent = d.questions || '0';
+    document.getElementById('statClimaTemp').innerHTML = Number(d.climaTemp || 0).toFixed(1) + '<span class="stat-unit">°C</span>';
+    document.getElementById('infoIP').textContent = d.ip || '--';
+    document.getElementById('infoSSID').textContent = d.ssid || '--';
+    document.getElementById('infoModelo').textContent = d.modelo || '--';
+    document.getElementById('infoCidade').textContent = d.cidade || '--';
+    document.getElementById('infoSD').textContent = d.sdOK ? 'OK' : 'Falha';
+    document.getElementById('infoOTA').textContent = d.otaAtivo ? 'Ativo' : 'Inativo';
+}
+
+function refreshDash(force){
+  force = !!force;
+  var el = document.getElementById('refreshIcon');
+  if(!force && cachePainel.status && (Date.now() - cacheTs.status) < cacheTTL.status){
+    aplicarStatusDashboard(cachePainel.status);
+    return;
+  }
+  el.textContent = '...';
+  request('/api/status', {}, function(d){
+    el.textContent = 'Atualizar';
+    if(!d) return;
+    cachePainel.status = d;
+    cacheTs.status = Date.now();
+    aplicarStatusDashboard(d);
   });
 }
 
-// CLIMA
-function applyClima(d){
-  document.getElementById('ccid').textContent=d.cidade||'--';
-  document.getElementById('ct_').innerHTML=+(d.temp||0).toFixed(1)+'<span class="su">°C</span>';
-  document.getElementById('cs_').innerHTML=+(d.sensTermica||0).toFixed(1)+'<span class="su">°C</span>';
-  document.getElementById('ch_').innerHTML=+(d.umidade||0)+'<span class="su">%</span>';
-  document.getElementById('cp_').innerHTML=+(d.pressao||0)+'<span class="su">hPa</span>';
-  document.getElementById('cv_').innerHTML=+(d.vento||0).toFixed(1)+'<span class="su">km/h</span>';
-  document.getElementById('cd_').textContent=d.descricao||'--';
+function aplicarClima(d){
+  document.getElementById('climaCidade').textContent = d.cidade || '--';
+  document.getElementById('cTemp').innerHTML = Number(d.temp || 0).toFixed(1) + '<span class="stat-unit">°C</span>';
+  document.getElementById('cSens').innerHTML = Number(d.sensTermica || 0).toFixed(1) + '<span class="stat-unit">°C</span>';
+  document.getElementById('cHum').innerHTML = Number(d.umidade || 0) + '<span class="stat-unit">%</span>';
+  document.getElementById('cPressao').innerHTML = Number(d.pressao || 0) + '<span class="stat-unit">hPa</span>';
+  document.getElementById('cVento').innerHTML = Number(d.vento || 0).toFixed(1) + '<span class="stat-unit">km/h</span>';
+  document.getElementById('cDesc').textContent = d.descricao || '--';
   if(d.prev){
-    document.getElementById('ph1').textContent=d.prev.h1||'+3h';
-    document.getElementById('ph2').textContent=d.prev.h2||'+6h';
-    document.getElementById('ph3').textContent=d.prev.h3||'+9h';
-    document.getElementById('pt1').textContent=Math.round(d.prev.t1||0)+'°';
-    document.getElementById('pt2').textContent=Math.round(d.prev.t2||0)+'°';
-    document.getElementById('pt3').textContent=Math.round(d.prev.t3||0)+'°';
-    document.getElementById('pr1').textContent=Math.round(d.prev.r1||0)+'%';
-    document.getElementById('pr2').textContent=Math.round(d.prev.r2||0)+'%';
-    document.getElementById('pr3').textContent=Math.round(d.prev.r3||0)+'%';
+    document.getElementById('ph1').textContent = d.prev.h1 || '+3h';
+    document.getElementById('ph2').textContent = d.prev.h2 || '+6h';
+    document.getElementById('ph3').textContent = d.prev.h3 || '+9h';
+    document.getElementById('pt1').textContent = Math.round(d.prev.t1 || 0) + '°';
+    document.getElementById('pt2').textContent = Math.round(d.prev.t2 || 0) + '°';
+    document.getElementById('pt3').textContent = Math.round(d.prev.t3 || 0) + '°';
+    document.getElementById('pr1').textContent = Math.round(d.prev.r1 || 0) + '%';
+    document.getElementById('pr2').textContent = Math.round(d.prev.r2 || 0) + '%';
+    document.getElementById('pr3').textContent = Math.round(d.prev.r3 || 0) + '%';
   }
-  var ab=document.getElementById('alerb');
-  ab.style.display=d.alertaAtivo?'block':'none';
-  document.getElementById('alerm').textContent=d.alertaMsg||'';
+  document.getElementById('alertaCard').style.display = d.alertaAtivo ? 'block' : 'none';
+  document.getElementById('alertaMsg').textContent = d.alertaMsg || '';
 }
-function loadClima(f){
-  if(!f&&PC.c&&(Date.now()-PT.c)<PL.c){applyClima(PC.c);return;}
-  req('/api/clima',{},function(d){if(!d)return;PC.c=d;PT.c=Date.now();applyClima(d);});
-}
-function atuClima(){
-  toast('Atualizando...','i');
-  req('/api/clima/update',{m:'POST'},function(d){
-    if(d&&d.ok){toast('Clima atualizado!','s');loadClima(1);}else toast('Erro.','e');
+
+function loadClima(force){
+  force = !!force;
+  if(!force && cachePainel.clima && (Date.now() - cacheTs.clima) < cacheTTL.clima){
+    aplicarClima(cachePainel.clima);
+    return;
+  }
+  request('/api/clima', {}, function(d){
+    if(!d) return;
+    cachePainel.clima = d;
+    cacheTs.clima = Date.now();
+    aplicarClima(d);
   });
 }
 
-// SD
+function atualizarClima(){
+  toast('Atualizando clima...', 'info');
+  request('/api/clima/update', {method:'POST'}, function(d){
+    if(d && d.ok){ toast('Clima atualizado!', 'success'); loadClima(true); }
+    else toast('Erro ao atualizar.', 'error');
+  });
+}
+
 function loadFiles(path){
-  var t=document.getElementById('ftree');t.innerHTML='<span style="color:var(--mu)">Carregando...</span>';
-  req('/api/sd/list?path='+encodeURIComponent(path),{},function(d){
-    if(!d){t.innerHTML='<span style="color:var(--ac3)">Erro ao ler SD</span>';return;}
-    var h='',i,f;
-    if(path!=='/'){
-      var par=path.lastIndexOf('/')>0?path.substring(0,path.lastIndexOf('/')):'/';
-      h+='<div class="fd" data-p="'+esc(par)+'">↩ voltar</div>';
+  var tree = document.getElementById('fileTree');
+  tree.innerHTML = '<div style="color:var(--muted);font-family:var(--mono);font-size:13px;padding:12px">Carregando...</div>';
+  request('/api/sd/list?path=' + encodeURIComponent(path), {}, function(d){
+    if(!d){ tree.innerHTML = '<div style="color:var(--red);padding:12px">Erro ao ler SD</div>'; return; }
+    var html = '';
+    if(path !== '/'){
+      var parent = path.substring(0, path.lastIndexOf('/')) || '/';
+      html += '<div class="file-dir" data-path="' + escHtml(parent) + '">← voltar</div>';
     }
-    if(d.dirs)for(i=0;i<d.dirs.length;i++)
-      h+='<div class="fd" data-p="'+esc(d.dirs[i].path)+'">📁 '+esc(d.dirs[i].name)+'</div>';
-    if(d.files)for(i=0;i<d.files.length;i++){
-      f=d.files[i];
-      h+='<div class="fe" data-f="'+esc(f.path)+'"><span>📄 '+esc(f.name)+'</span>'+
-         '<span class="fsz">'+fb(f.size)+'</span>'+
-         '<div class="fa"><button class="fb" data-a="e">Editar</button>'+
-         '<button class="fb del" data-a="d">Del</button></div></div>';
+    var i, f;
+    if(d.dirs){
+      for(i=0; i<d.dirs.length; i++){
+        html += '<div class="file-dir" data-path="' + escHtml(d.dirs[i].path) + '">' + escHtml(d.dirs[i].name) + '</div>';
+      }
     }
-    t.innerHTML=h||'<span style="color:var(--mu)">Pasta vazia.</span>';
-    var ds=t.querySelectorAll('.fd[data-p]');
-    for(i=0;i<ds.length;i++)(function(el){el.onclick=function(){loadFiles(el.getAttribute('data-p'));}})(ds[i]);
-    var fs=t.querySelectorAll('.fe[data-f]');
-    for(i=0;i<fs.length;i++)(function(el){el.onclick=function(ev){
-      var e=ev||window.event,tg=e.target||e.srcElement,pf=el.getAttribute('data-f'),a=tg?tg.getAttribute('data-a'):null;
-      if(a==='e'){if(e.stopPropagation)e.stopPropagation();editArq(pf);}
-      else if(a==='d'){if(e.stopPropagation)e.stopPropagation();conf('Deletar arquivo?',function(){delArq(pf);});}
-    };})(fs[i]);
-  });
-}
-function editArq(p){
-  document.getElementById('etit').textContent=p;document.getElementById('eare').value='…';
-  CF=p;document.getElementById('emod').className='mo on';
-  req('/api/sd/read?path='+encodeURIComponent(p),{},function(d){
-    document.getElementById('eare').value=d?(d.content||''):'(erro)';});
-}
-function salvEd(){
-  req('/api/sd/write',{m:'POST',h:{'Content-Type':'application/json'},
-    b:JSON.stringify({path:CF,content:document.getElementById('eare').value})},function(d){
-    if(d&&d.ok){toast('Salvo!','s');closeEd();}else toast('Erro.','e');});
-}
-function delCur(){conf('Deletar permanentemente?',function(){closeEd();delArq(CF);});}
-function delArq(p){
-  req('/api/sd/delete',{m:'POST',h:{'Content-Type':'application/json'},b:JSON.stringify({path:p})},function(d){
-    var dir=p.lastIndexOf('/')>0?p.substring(0,p.lastIndexOf('/')):'/';
-    if(d&&d.ok){toast('Deletado.','s');loadFiles(dir);}else toast('Erro.','e');});
-}
-function criarArq(){
-  var p=document.getElementById('nfp').value.replace(/^\s+|\s+$/g,'');
-  var c=document.getElementById('nfc').value;
-  if(!p){toast('Informe o caminho.','e');return;}
-  req('/api/sd/write',{m:'POST',h:{'Content-Type':'application/json'},b:JSON.stringify({path:p,content:c})},function(d){
-    if(d&&d.ok){toast('Criado!','s');document.getElementById('nfp').value='';document.getElementById('nfc').value='';
-      loadFiles(p.substring(0,p.lastIndexOf('/'))||'/');}else toast('Erro.','e');});
-}
-function closeEd(){document.getElementById('emod').className='mo';}
+    if(d.files){
+      for(i=0; i<d.files.length; i++){
+        f = d.files[i];
+        html += '<div class="file-entry" data-file="' + escHtml(f.path) + '">' +
+          '<span class="file-name">' + escHtml(f.name) + '</span>' +
+          '<span class="file-size">' + formatBytes(f.size) + '</span>' +
+          '<div class="file-actions"><button class="file-btn" data-action="edit">Editar</button><button class="file-btn del" data-action="del">Del</button></div></div>';
+      }
+    }
+    tree.innerHTML = html || '<div style="color:var(--muted);padding:12px">Pasta vazia.</div>';
 
-// CONFIG
-function applyCfg(d){
-  document.getElementById('cfmod').value=d.modelo||'gemini-2.5-flash';
-  document.getElementById('cfcid').value=d.cidade||'Muriae,BR';
-  document.getElementById('cfpers').value=d.personalidade||'';
-  document.getElementById('tled').checked=!d.ledDesabilitado;
-  document.getElementById('toled').checked=!d.oledDesabilitado;
-  document.getElementById('taler').checked=!d.alertasDesabilitados;
-  document.getElementById('tnot').checked=!d.noturnoDesabilitado;
-  document.getElementById('cni').value=String(d.noturnoInicio!=null?d.noturnoInicio:22);
-  document.getElementById('cnf').value=String(d.noturnoFim!=null?d.noturnoFim:8);
-  fillLED('wifi',d.ledColors&&d.ledColors.wifi,d.ledEffects&&d.ledEffects.wifi);
-  fillLED('idle',d.ledColors&&d.ledColors.idle,d.ledEffects&&d.ledEffects.idle);
-  fillLED('processing',d.ledColors&&d.ledColors.processing,d.ledEffects&&d.ledEffects.processing);
-  fillLED('success',d.ledColors&&d.ledColors.success,d.ledEffects&&d.ledEffects.success);
-  fillLED('error',d.ledColors&&d.ledColors.error,d.ledEffects&&d.ledEffects.error);
-  applyWfSt(d);
-}
-function loadCfg(f){
-  if(!f&&PC.g&&(Date.now()-PT.g)<PL.g){applyCfg(PC.g);return;}
-  req('/api/config',{},function(d){if(!d)return;PC.g=d;PT.g=Date.now();applyCfg(d);});
-}
-function salvCfg(cb){
-  var p={modelo:document.getElementById('cfmod').value,cidade:document.getElementById('cfcid').value,
-    noturnoInicio:parseInt(document.getElementById('cni').value,10),
-    noturnoFim:parseInt(document.getElementById('cnf').value,10),
-    ledColors:colLED(),ledEffects:efLED()};
-  req('/api/config',{m:'POST',h:{'Content-Type':'application/json'},b:JSON.stringify(p)},function(d){
-    if(d&&d.ok)PT.g=0;
-    if(cb)cb(d&&d.ok);else toast(d&&d.ok?'Salvo!':'Erro.',d&&d.ok?'s':'e');
+    var dirs = tree.querySelectorAll('.file-dir[data-path]');
+    for(i=0; i<dirs.length; i++) dirs[i].onclick = function(){ loadFiles(this.getAttribute('data-path')); };
+
+    var files = tree.querySelectorAll('.file-entry[data-file]');
+    for(i=0; i<files.length; i++){
+      files[i].onclick = function(ev){
+        var e = ev || window.event;
+        var target = e.target || e.srcElement;
+        var pathFile = this.getAttribute('data-file');
+        if(target && target.getAttribute('data-action') === 'edit'){
+          if(e.stopPropagation) e.stopPropagation();
+          editarArquivo(pathFile);
+        } else if(target && target.getAttribute('data-action') === 'del'){
+          if(e.stopPropagation) e.stopPropagation();
+          confirmar('Deletar arquivo?', function(){ deletarArquivo(pathFile); });
+        }
+      };
+    }
   });
 }
-function salvNot(){salvCfg(function(ok){toast(ok?'Horário noturno salvo!':'Erro.',ok?'s':'e');});}
-function salvLED(){salvCfg(function(ok){toast(ok?'Cores salvas!':'Erro.',ok?'s':'e');});}
-function salvPers(){
-  req('/api/personalidade',{m:'POST',h:{'Content-Type':'application/json'},
-    b:JSON.stringify({texto:document.getElementById('cfpers').value})},function(d){
-    toast(d&&d.ok?'Personalidade salva!':'Erro.',d&&d.ok?'s':'e');});
-}
-function togFunc(n,v){
-  req('/api/toggle',{m:'POST',h:{'Content-Type':'application/json'},b:JSON.stringify({name:n,enabled:v})},
-    function(){toast((v?'ON: ':'OFF: ')+n,'i');});
-}
-function applyWfSt(c){
-  var el=document.getElementById('wfst');if(!el)return;
-  var on=!!(c&&c.apConfigAtivo),nm=(c&&c.apConfigNome)||'Aurora-Setup';
-  el.innerHTML=on?('<span class="k">AP ativo: </span><span class="va">'+nm+'</span><span class="k"> (192.168.4.1)</span>')
-                 :'<span class="k">AP inativo. Duplo clique no botão WEB para ligar.</span>';
-}
-function scanWifi(){
-  req('/api/wifi/scan',{},function(d){
-    if(!d){toast('Scan falhou.','e');return;}
-    if(d.scanning){toast('Escaneando...','i');setTimeout(function(){
-      req('/api/wifi/scan',{},function(d2){if(d2&&d2.done)fillScan(d2);else toast('Aguardando scan...','i');});
-    },3000);return;}
-    if(d.done)fillScan(d);
+
+function editarArquivo(path){
+  document.getElementById('editorTitle').textContent = path;
+  document.getElementById('editorArea').value = 'Carregando...';
+  currentFile = path;
+  document.getElementById('editorModal').className = 'modal-overlay open';
+  request('/api/sd/read?path=' + encodeURIComponent(path), {}, function(d){
+    document.getElementById('editorArea').value = d ? (d.content || '') : '(erro ao ler arquivo)';
   });
 }
-function fillScan(d){
-  var s=document.getElementById('wscan');if(!s)return;
-  s.innerHTML='<option value="">-- selecione --</option>';
-  if(d.redes)for(var i=0;i<d.redes.length;i++){
-    var r=d.redes[i],o=document.createElement('option');
-    o.value=r.ssid;o.text=r.ssid+' ('+r.rssi+'dBm'+(r.open?', aberta':'')+')';s.appendChild(o);
+
+function salvarArquivoEditor(){
+  var content = document.getElementById('editorArea').value;
+  request('/api/sd/write', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path: currentFile, content: content})}, function(d){
+    if(d && d.ok){ toast('Arquivo salvo!', 'success'); closeEditor(); }
+    else toast('Erro ao salvar.', 'error');
+  });
+}
+
+function deletarArquivoAtual(){ confirmar('Deletar este arquivo permanentemente?', function(){ closeEditor(); deletarArquivo(currentFile); }); }
+
+function deletarArquivo(path){
+  request('/api/sd/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path:path})}, function(d){
+    if(d && d.ok){ toast('Arquivo deletado.', 'success'); loadFiles(path.substring(0, path.lastIndexOf('/'))||'/'); }
+    else toast('Erro ao deletar.', 'error');
+  });
+}
+
+function criarArquivo(){
+  var path = document.getElementById('newFilePath').value.replace(/^\s+|\s+$/g, '');
+  var content = document.getElementById('newFileContent').value;
+  if(!path){ toast('Informe o caminho do arquivo.', 'error'); return; }
+  request('/api/sd/write', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path:path, content:content})}, function(d){
+    if(d && d.ok){
+      toast('Arquivo criado!', 'success');
+      document.getElementById('newFilePath').value = '';
+      document.getElementById('newFileContent').value = '';
+      loadFiles(path.substring(0, path.lastIndexOf('/')) || '/');
+    } else toast('Erro ao criar arquivo.', 'error');
+  });
+}
+
+function closeEditor(){ document.getElementById('editorModal').className = 'modal-overlay'; }
+
+function aplicarConfig(d){
+    document.getElementById('cfgModelo').value = d.modelo || 'gemini-2.5-flash';
+    document.getElementById('cfgCidade').value = d.cidade || 'Muriae,BR';
+    document.getElementById('cfgPersonalidade').value = d.personalidade || '';
+    document.getElementById('togLED').checked = !d.ledDesabilitado;
+    document.getElementById('togOLED').checked = !d.oledDesabilitado;
+    document.getElementById('togAlertas').checked = !d.alertasDesabilitados;
+    document.getElementById('togNoturno').checked = !d.noturnoDesabilitado;
+    document.getElementById('cfgNoturnoInicio').value = String(d.noturnoInicio != null ? d.noturnoInicio : 22);
+    document.getElementById('cfgNoturnoFim').value = String(d.noturnoFim != null ? d.noturnoFim : 8);
+
+    preencherControleLED('wifi', d.ledColors && d.ledColors.wifi, d.ledEffects && d.ledEffects.wifi);
+    preencherControleLED('idle', d.ledColors && d.ledColors.idle, d.ledEffects && d.ledEffects.idle);
+    preencherControleLED('processing', d.ledColors && d.ledColors.processing, d.ledEffects && d.ledEffects.processing);
+    preencherControleLED('success', d.ledColors && d.ledColors.success, d.ledEffects && d.ledEffects.success);
+    preencherControleLED('error', d.ledColors && d.ledColors.error, d.ledEffects && d.ledEffects.error);
+    atualizarEstadoWiFiUI(d);
+}
+
+function loadConfig(force){
+  force = !!force;
+  if(!force && cachePainel.config && (Date.now() - cacheTs.config) < cacheTTL.config){
+    aplicarConfig(cachePainel.config);
+    return;
   }
-  toast('Scan: '+(d.redes?d.redes.length:0)+' rede(s).','i');
-}
-function conWifi(){
-  var s=document.getElementById('wscan').value||document.getElementById('wssid').value.replace(/^\s+|\s+$/g,'');
-  var p=document.getElementById('wpass').value;
-  if(!s){toast('Informe o SSID.','e');return;}
-  toast('Conectando...','i');
-  req('/api/wifi/connect',{m:'POST',h:{'Content-Type':'application/json'},b:JSON.stringify({ssid:s,senha:p})},
-    function(d){if(d&&d.ok){toast('Conectado! IP: '+(d.ip||'--'),'s');PT.s=0;loadCfg(1);rdash(1);}
-      else toast('Falha ao conectar.','e');});
+  request('/api/config', {}, function(d){
+    if(!d) return;
+    cachePainel.config = d;
+    cacheTs.config = Date.now();
+    aplicarConfig(d);
+  });
 }
 
-// CONTROLE
-function cmdRst(){req('/api/cmd/reset',{m:'POST'},function(){});toast('Reiniciando...','w');}
-function cmdOTA(){req('/api/cmd/ota',{m:'POST'},function(d){toast(d&&d.ok?'OTA ativo. IP: '+d.ip:'Erro OTA.',d&&d.ok?'s':'e');});}
-function cmdRel(){req('/api/cmd/relatorio',{m:'POST'},function(d){
-  var b=document.getElementById('relbox'),c=document.getElementById('relc');
-  if(d&&d.relatorio){b.style.display='block';c.textContent=d.relatorio;toast('Relatório gerado!','s');}
-  else toast('Erro.','e');});}
-function cmdIA(){req('/api/cmd/limpar-ia',{m:'POST'},function(d){toast(d&&d.ok?'Histórico IA apagado.':'Erro.',d&&d.ok?'s':'e');});}
-function cmdLogs(){req('/api/cmd/limpar-logs',{m:'POST'},function(d){toast(d&&d.ok?'Logs apagados.':'Erro.',d&&d.ok?'s':'e');});}
-function cmdMem(){req('/api/cmd/limpar-mem',{m:'POST'},function(d){toast(d&&d.ok?'Memória apagada.':'Erro.',d&&d.ok?'s':'e');});}
-function fetchLog(){req('/api/log',{},function(d){
-  if(!d||!d.lines)return;
-  var h=[];
-  for(var i=0;i<d.lines.length;i++){var l=d.lines[i]||'';
-    var cl=(l.indexOf('Erro')>=0||l.indexOf('erro')>=0)?'e':(l.indexOf('OK')>=0||l.indexOf('ok')>=0)?'k':'';
-    h.push('<span class="ll '+cl+'">'+esc(l)+'</span>');}
-  var b=document.getElementById('logb');b.innerHTML=h.join('\n');b.scrollTop=b.scrollHeight;
-});}
+function salvarConfig(callback){
+  var payload = {
+    modelo: document.getElementById('cfgModelo').value,
+    cidade: document.getElementById('cfgCidade').value,
+    noturnoInicio: parseInt(document.getElementById('cfgNoturnoInicio').value, 10),
+    noturnoFim: parseInt(document.getElementById('cfgNoturnoFim').value, 10),
+    ledColors: coletarCoresLED(),
+    ledEffects: coletarEfeitosLED()
+  };
+  request('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)}, function(d){
+    if(d && d.ok){ cacheTs.config = 0; }
+    if(callback) callback(d && d.ok);
+    if(!callback){ if(d && d.ok) toast('Configurações salvas!', 'success'); else toast('Erro ao salvar.', 'error'); }
+  });
+}
 
-// LED
-function buildLED(){
-  var b=document.getElementById('leds');if(!b||b.getAttribute('dr'))return;
-  var h='',k=Object.keys(AL);
-  for(var i=0;i<k.length;i++){var s=k[i];
-    h+='<div class="fg" style="margin-bottom:8px">'+
-      '<div><div class="fl">'+AL[s]+' · Cor</div><select class="inp" id="lc_'+s+'"></select></div>'+
-      '<div><div class="fl">'+AL[s]+' · Efeito</div><select class="inp" id="le_'+s+'"></select></div></div>';
+function salvarHorarioNoturno(){
+  salvarConfig(function(ok){ toast(ok ? 'Horário noturno salvo!' : 'Erro ao salvar horário.', ok ? 'success' : 'error'); });
+}
+
+function salvarCoresLED(){
+  salvarConfig(function(ok){ toast(ok ? 'Cores do LED salvas!' : 'Erro ao salvar cores.', ok ? 'success' : 'error'); });
+}
+
+function salvarPersonalidade(){
+  var texto = document.getElementById('cfgPersonalidade').value;
+  request('/api/personalidade', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({texto:texto})}, function(d){
+    if(d && d.ok) toast('Personalidade salva!', 'success');
+    else toast('Erro ao salvar.', 'error');
+  });
+}
+
+function toggleFunc(name, enabled){
+  request('/api/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name:name, enabled:enabled})}, function(){
+    toast(name + ' ' + (enabled ? 'ativado' : 'desativado'), 'info');
+  });
+}
+
+function cmdReset(){ request('/api/cmd/reset', {method:'POST'}, function(){}); toast('Reiniciando...', 'warn'); }
+function cmdOTA(){ request('/api/cmd/ota', {method:'POST'}, function(d){ toast(d && d.ok ? 'OTA ativo. IP: ' + d.ip : 'Erro ao ativar OTA.', d && d.ok ? 'success' : 'error'); }); }
+function cmdRelatorio(){ request('/api/cmd/relatorio', {method:'POST'}, function(d){ var box=document.getElementById('relatorioBox'); if(d && d.relatorio){ box.textContent=d.relatorio; box.style.display='block'; toast('Relatório gerado!', 'success'); } else toast('Erro ao gerar.', 'error'); }); }
+function cmdLimparIA(){ request('/api/cmd/limpar-ia', {method:'POST'}, function(d){ toast(d&&d.ok?'Histórico IA apagado.':'Erro.', d&&d.ok?'success':'error'); }); }
+function cmdLimparLogs(){ request('/api/cmd/limpar-logs', {method:'POST'}, function(d){ toast(d&&d.ok?'Logs apagados.':'Erro.', d&&d.ok?'success':'error'); }); }
+function cmdLimparMem(){ request('/api/cmd/limpar-mem', {method:'POST'}, function(d){ toast(d&&d.ok?'Memória apagada.':'Erro.', d&&d.ok?'success':'error'); }); }
+
+function fetchLog(){
+  request('/api/log', {}, function(d){
+    if(!d || !d.lines) return;
+    var lines = [];
+    for(var i=0;i<d.lines.length;i++){
+      var l = d.lines[i] || '';
+      var cl = (l.indexOf('Erro')>=0 || l.indexOf('erro')>=0) ? 'err' :
+               (l.indexOf('OK')>=0 || l.indexOf('ok')>=0) ? 'ok' :
+               (l.indexOf('Warn')>=0 ? 'warn' : '');
+      lines.push('<span class="log-line '+cl+'">'+escHtml(l)+'</span>');
+    }
+    var box = document.getElementById('logBox');
+    box.innerHTML = lines.join('\\n');
+    box.scrollTop = box.scrollHeight;
+  });
+}
+
+
+function atualizarEstadoWiFiUI(cfg){
+  var el = document.getElementById('wifiStateInfo');
+  if(!el) return;
+  var apOn = !!(cfg && cfg.apConfigAtivo);
+  var apNome = (cfg && cfg.apConfigNome) ? cfg.apConfigNome : 'Aurora-Setup';
+  var msg = apOn ? ('AP ativo: ' + apNome + ' (192.168.4.1). ') : 'AP de configuração inativo. ';
+  msg += 'Dê duplo clique no botão WEB para ligar/desligar AP.';
+  el.textContent = msg;
+}
+
+function scanWiFi(){
+  request('/api/wifi/scan', {}, function(d){
+    if(!d || !d.redes){ toast('Falha ao escanear redes.', 'error'); return; }
+    var sel = document.getElementById('wifiScanList');
+    if(!sel) return;
+    sel.innerHTML = '<option value="">-- selecione --</option>';
+    for(var i=0; i<d.redes.length; i++){
+      var r = d.redes[i];
+      var lbl = r.ssid + ' (' + r.rssi + ' dBm' + (r.open ? ', aberta' : '') + ')';
+      sel.options.add(new Option(lbl, r.ssid));
+    }
+    toast('Scan concluído: ' + d.redes.length + ' rede(s).', 'info');
+  });
+}
+
+function conectarNovoWiFi(){
+  var ssidSel = document.getElementById('wifiScanList').value;
+  var ssidMan = document.getElementById('wifiSsid').value.replace(/^\s+|\s+$/g, '');
+  var ssid = ssidMan || ssidSel;
+  var senha = document.getElementById('wifiPass').value;
+  if(!ssid){ toast('Selecione ou digite o SSID.', 'error'); return; }
+  toast('Conectando em ' + ssid + ' ...', 'info');
+  request('/api/wifi/connect', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ssid:ssid, senha:senha})
+  }, function(d){
+    if(d && d.ok){
+      toast('Conectado! IP: ' + (d.ip || '--'), 'success');
+      cacheTs.status = 0;
+      loadConfig(true);
+      refreshDash(true);
+    } else {
+      toast('Falha ao conectar na rede.', 'error');
+    }
+  });
+}
+
+function confirmar(msg, cb){ if(confirm(msg)) cb(); }
+function toast(msg, type){
+  type = type || 'info';
+  var wrap = document.getElementById('toast');
+  var el = document.createElement('div');
+  el.className = 'toast-item ' + type;
+  el.appendChild(document.createTextNode(msg));
+  wrap.appendChild(el);
+  setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 3000);
+}
+
+function preencherHoras(){
+  var ini = document.getElementById('cfgNoturnoInicio');
+  var fim = document.getElementById('cfgNoturnoFim');
+  if(ini.options.length) return;
+  for(var h=0; h<24; h++){
+    var txt = pad2(h) + ':00';
+    ini.options.add(new Option(txt, String(h)));
+    fim.options.add(new Option(txt, String(h)));
   }
-  b.innerHTML=h;b.setAttribute('dr','1');
-  var j;for(j=0;j<k.length;j++){fillSel('lc_'+k[j],CL,'id','n');fillSel('le_'+k[j],EF,'id','n');}
 }
-function fillSel(id,arr,vk,tk){var s=document.getElementById(id);if(!s)return;s.innerHTML='';
-  for(var i=0;i<arr.length;i++){var o=document.createElement('option');o.value=arr[i][vk];o.text=arr[i][tk];s.appendChild(o);}
-}
-function fillLED(st,rgb,ef){
-  var h=rgb?r2h(rgb):'#58a6ff';
-  var cs=document.getElementById('lc_'+st),es=document.getElementById('le_'+st);
-  if(cs)cs.value=nearest(h);if(es)es.value=ef||'respiracao';
-}
-function colLED(){var o={};Object.keys(AL).forEach(function(s){
-  var s2=document.getElementById('lc_'+s);o[s]=h2r(s2?s2.value:'#58a6ff');});return o;}
-function efLED(){var o={};Object.keys(AL).forEach(function(s){
-  var s2=document.getElementById('le_'+s);o[s]=s2?s2.value:'respiracao';});return o;}
-function nearest(hex){var a=h2r(hex),b=CL[0].h,d=9999;
-  for(var i=0;i<CL.length;i++){var c=h2r(CL[i].h),x=Math.abs(c.r-a.r)+Math.abs(c.g-a.g)+Math.abs(c.b-a.b);
-    if(x<d){d=x;b=CL[i].h;}}return b;}
 
-// HOURS
-function fillHours(){var ni=document.getElementById('cni'),nf=document.getElementById('cnf');
-  if(!ni||ni.options.length)return;
-  for(var h=0;h<24;h++){var t=p2(h)+':00';
-    var o1=document.createElement('option');o1.value=String(h);o1.text=t;ni.appendChild(o1);
-    var o2=document.createElement('option');o2.value=String(h);o2.text=t;nf.appendChild(o2);}}
+function montarControlesLED(){
+  var box = document.getElementById('ledStatesBox');
+  if(!box || box.getAttribute('data-ready') === '1') return;
+  var html = '';
+  for(var i=0; i<ESTADOS_LED.length; i++){
+    var estado = ESTADOS_LED[i];
+    html += '<div class="form-row" style="margin-bottom:10px">' +
+      '<div><div class="form-label">' + NOME_ESTADO[estado] + ' · Cor</div><select class="inp" id="ledColor_' + estado + '"></select></div>' +
+      '<div><div class="form-label">' + NOME_ESTADO[estado] + ' · Efeito</div><select class="inp" id="ledEffect_' + estado + '"></select></div>' +
+      '</div>';
+  }
+  box.innerHTML = html;
+  for(var c=0; c<ESTADOS_LED.length; c++){
+    var st = ESTADOS_LED[c];
+    popularSelectCor('ledColor_' + st);
+    popularSelectEfeito('ledEffect_' + st);
+  }
+  box.setAttribute('data-ready', '1');
+}
 
-// UTILS
-function h2r(hex){var h=String(hex||'').replace(/[^0-9a-fA-F]/g,'');
-  if(h.length<6)h=(h+'000000').substring(0,6);h=h.substring(0,6);
-  return{r:parseInt(h.substring(0,2),16),g:parseInt(h.substring(2,4),16),b:parseInt(h.substring(4,6),16)};}
-function r2h(c){return'#'+th(c.r||0)+th(c.g||0)+th(c.b||0);}
-function th(v){var s=Number(v).toString(16);return s.length<2?'0'+s:s;}
-function p2(v){return v<10?'0'+v:String(v);}
-function fb(b){if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'KB';return(b/1048576).toFixed(1)+'MB';}
-function esc(s){s=String(s||'');return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function conf(m,cb){if(window.confirm(m))cb();}
-function toast(m,t){t=t||'i';
-  var w=document.getElementById('toast'),el=document.createElement('div');
-  el.className='ti2 '+t;el.appendChild(document.createTextNode(m));w.appendChild(el);
-  setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},3200);}
+function popularSelectCor(id){
+  var sel = document.getElementById(id);
+  if(!sel) return;
+  sel.innerHTML = '';
+  for(var i=0; i<CORES_LED.length; i++){
+    sel.options.add(new Option(CORES_LED[i].nome, CORES_LED[i].hex));
+  }
+}
+
+function popularSelectEfeito(id){
+  var sel = document.getElementById(id);
+  if(!sel) return;
+  sel.innerHTML = '';
+  for(var i=0; i<EFEITOS_LED.length; i++){
+    sel.options.add(new Option(EFEITOS_LED[i].nome, EFEITOS_LED[i].id));
+  }
+}
+
+function preencherControleLED(estado, rgb, efeito){
+  var hex = rgb ? rgbToHex(rgb) : '#0050ff';
+  var corSel = document.getElementById('ledColor_' + estado);
+  var efSel = document.getElementById('ledEffect_' + estado);
+  if(corSel) corSel.value = corMaisProxima(hex);
+  if(efSel) efSel.value = efeito || 'respiracao';
+}
+
+function coletarCoresLED(){
+  var out = {};
+  for(var i=0; i<ESTADOS_LED.length; i++){
+    var st = ESTADOS_LED[i];
+    var sel = document.getElementById('ledColor_' + st);
+    out[st] = hexToRgb(sel ? sel.value : '#0050ff');
+  }
+  return out;
+}
+
+function coletarEfeitosLED(){
+  var out = {};
+  for(var i=0; i<ESTADOS_LED.length; i++){
+    var st = ESTADOS_LED[i];
+    var sel = document.getElementById('ledEffect_' + st);
+    out[st] = sel ? sel.value : 'respiracao';
+  }
+  return out;
+}
+
+function corMaisProxima(hex){
+  var alvo = hexToRgb(hex);
+  var melhor = CORES_LED[0].hex;
+  var distMelhor = 999999;
+  for(var i=0; i<CORES_LED.length; i++){
+    var c = hexToRgb(CORES_LED[i].hex);
+    var d = Math.abs(c.r-alvo.r) + Math.abs(c.g-alvo.g) + Math.abs(c.b-alvo.b);
+    if(d < distMelhor){ distMelhor = d; melhor = CORES_LED[i].hex; }
+  }
+  return melhor;
+}
+
+function normalizarHex(hex){
+  var h = String(hex || '').replace(/[^0-9a-fA-F]/g, '');
+  if(h.length < 6) h = (h + '000000').substring(0, 6);
+  if(h.length > 6) h = h.substring(0, 6);
+  return '#' + h.toLowerCase();
+}
+
+function hexToRgb(hex){
+  var h = normalizarHex(hex).replace('#', '');
+  return { r: parseInt(h.substring(0,2), 16), g: parseInt(h.substring(2,4), 16), b: parseInt(h.substring(4,6), 16) };
+}
+function rgbToHex(c){ return '#' + toHex(c.r || 0) + toHex(c.g || 0) + toHex(c.b || 0); }
+function toHex(v){ var s = Number(v).toString(16); return s.length < 2 ? '0' + s : s; }
+function pad2(v){ return v < 10 ? '0' + v : String(v); }
+function formatBytes(b){ if(b<1024) return b+'B'; if(b<1048576) return (b/1024).toFixed(1)+'KB'; return (b/1048576).toFixed(1)+'MB'; }
+function escHtml(s){ s=String(s||''); return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 </script>
 </body>
 </html>

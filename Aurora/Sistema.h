@@ -22,8 +22,6 @@ void initTemperatura();
 float lerTemperatura();
 void enviarMenu();
 bool isModoNoturnoAgora();
-bool isModoNoturnoComHora(int hora);
-bool _isModoNoturno(int h);
 String faixaModoNoturno();
 void iniciarModoConfigAP();
 void pararModoConfigAP();

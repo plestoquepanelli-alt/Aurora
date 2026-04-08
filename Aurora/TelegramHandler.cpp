@@ -553,13 +553,16 @@ static void handleText(const String& chat_id, const String& text){
   String textCmd = text;
   textCmd.toLowerCase();
 
-  // Modo noturno: ignora mensagens silenciosamente para evitar HTTPS desnecessário.
-  // Exceções: admin, /status, /hora e qualquer estado de espera ativo.
   if(isModoNoturnoAgora()){
     bool isAdmin  = textCmd.startsWith("/admin") || _estado.startsWith("wait_admin");
     bool isStatus = (textCmd == "/status" || textCmd == "/hora");
     if(!isAdmin && !isStatus && _estado.isEmpty()){
-      return;  // silencioso — sem bot.sendMessage() à noite
+      bot.sendMessage(chat_id,
+        "🌙 *Modo noturno* (" + faixaModoNoturno() + ")\n"
+        "Bot silencioso para economizar recursos.\n"
+        "Alertas climáticos continuam ativos.\n"
+        "Use /status ou /hora se precisar.", "Markdown");
+      return;
     }
   }
 
