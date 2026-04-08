@@ -209,51 +209,61 @@ static inline bool botaoPressionadoDebounced(
     return false;
 }
 
+struct PendingResultado {
+    bool active;
+    uint32_t jobId;
+    String chatId;
+    String resposta;
+    unsigned long ts;
+    unsigned long startedAt;
+    uint16_t retries;
+};
+
+static void limparPendencia(PendingResultado &p){
+    p.active = false;
+    p.jobId = 0;
+    p.chatId = "";
+    p.resposta = "";
+    p.ts = 0;
+    p.startedAt = 0;
+    p.retries = 0;
+}
+
+static bool publicarResultadoPendente(PendingResultado &p){
+    if(!p.active) return true;
+    if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(200)) != pdTRUE){
+        p.retries++;
+        return false;
+    }
+
+    bool publicado = false;
+    if(gJob.jobId == p.jobId && gJob.chatId == p.chatId && gJob.state == GJOB_RUNNING){
+        gJob.resposta = p.resposta;
+        gJob.state    = GJOB_DONE;
+        publicado = true;
+    } else {
+        Serial.printf("[Core0] Gemini resultado descartado (job mudou). esperado=%lu atual=%lu\n",
+                      (unsigned long)p.jobId, (unsigned long)gJob.jobId);
+        publicado = true;
+    }
+
+    xSemaphoreGive(gMutex);
+    if(publicado){
+        Serial.printf("[Core0] Gemini done %dms (retries=%u)\n",
+                      (int)(millis() - p.ts), p.retries);
+        limparPendencia(p);
+    }
+    return publicado;
+}
+
 static void taskGemini(void* pv){
-    struct PendingResultado {
-        bool active = false;
-        uint32_t jobId = 0;
-        String chatId = "";
-        String resposta = "";
-        unsigned long ts = 0;
-        unsigned long startedAt = 0;
-        uint16_t retries = 0;
-    };
-    static PendingResultado pend;
-
-    auto tentarPublicarResultado = [&](PendingResultado &p) -> bool {
-        if(!p.active) return true;
-        if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(200)) != pdTRUE){
-            p.retries++;
-            return false;
-        }
-
-        bool publicado = false;
-        // Fluxo normal: ainda é o mesmo job em execução.
-        if(gJob.jobId == p.jobId && gJob.chatId == p.chatId && gJob.state == GJOB_RUNNING){
-            gJob.resposta = p.resposta;
-            gJob.state    = GJOB_DONE;
-            publicado = true;
-        } else {
-            // Segurança: se o job já mudou, nunca sobrescreve o job atual.
-            // Isso evita entregar resposta antiga no chat errado.
-            Serial.printf("[Core0] Gemini resultado descartado (job mudou). esperado=%lu atual=%lu\n",
-                          (unsigned long)p.jobId, (unsigned long)gJob.jobId);
-            publicado = true; // consome pendente para não travar pipeline
-        }
-
-        xSemaphoreGive(gMutex);
-        if(publicado){
-            Serial.printf("[Core0] Gemini done %dms (retries=%u)\n",
-                          (int)(millis() - p.ts), p.retries);
-            p = PendingResultado{};
-        }
-        return publicado;
-    };
+    (void)pv;
+    PendingResultado pend;
+    limparPendencia(pend);
 
     for(;;){
         if(pend.active){
-            tentarPublicarResultado(pend);
+            publicarResultadoPendente(pend);
             if(pend.active && (millis() - pend.startedAt > 10000UL)){
                 Serial.println("[Core0] Gemini timeout fallback: finalizando job com erro amigavel");
                 if(xSemaphoreTake(gMutex, pdMS_TO_TICKS(200)) == pdTRUE){
@@ -265,7 +275,7 @@ static void taskGemini(void* pv){
                     }
                     xSemaphoreGive(gMutex);
                 }
-                pend = PendingResultado{};
+                limparPendencia(pend);
             }
             vTaskDelay(pdMS_TO_TICKS(30));
             continue;
@@ -290,11 +300,8 @@ static void taskGemini(void* pv){
         }
 
         if(hasJob){
-            Serial.printf("[Core0] Gemini start heap=%d\n", ESP.getFreeHeap());
             String resp = perguntarGemini(pergunta);
-            if(resp.length() == 0){
-                resp = "Sem resposta do Gemini. Tente novamente.";
-            }
+            if(resp.length() == 0) resp = "Sem resposta do Gemini. Tente novamente.";
             pend.active = true;
             pend.jobId = jobId;
             pend.chatId = chatId;
@@ -302,7 +309,7 @@ static void taskGemini(void* pv){
             pend.ts = ts;
             pend.startedAt = millis();
             pend.retries = 0;
-            tentarPublicarResultado(pend);
+            publicarResultadoPendente(pend);
         }
         vTaskDelay(pdMS_TO_TICKS(30));
     }

@@ -1015,6 +1015,35 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
       </div>
       <button class="btn btn-primary" onclick="conectarNovoWiFi()">Conectar neste Wi-Fi</button>
     </div>
+
+    <div class="card">
+      <div class="card-title">LED por Estado (cor + efeito)</div>
+      <div id="ledStatesBox"></div>
+      <button class="btn btn-primary" onclick="salvarCoresLED()">Salvar Cores do LED</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Wi-Fi (AP por duplo clique no botão WEB)</div>
+      <div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:10px" id="wifiStateInfo">Carregando estado de rede...</div>
+      <div class="btn-row" style="margin-bottom:10px">
+        <button class="btn btn-secondary btn-sm" onclick="scanWiFi()">Escanear redes</button>
+      </div>
+      <div class="form-row">
+        <div>
+          <div class="form-label">Rede disponível</div>
+          <select class="inp" id="wifiScanList"><option value="">-- selecione --</option></select>
+        </div>
+        <div>
+          <div class="form-label">Ou SSID manual</div>
+          <input class="inp" id="wifiSsid" placeholder="Nome da rede">
+        </div>
+      </div>
+      <div>
+        <div class="form-label">Senha</div>
+        <input class="inp" id="wifiPass" type="password" placeholder="Senha da rede">
+      </div>
+      <button class="btn btn-primary" onclick="conectarNovoWiFi()">Conectar neste Wi-Fi</button>
+    </div>
     <div class="fl">Senha</div><input class="inp" id="wpass" type="password" placeholder="Senha">
     <button class="btn btn-p" onclick="conWifi()">Conectar</button>
   </div>
