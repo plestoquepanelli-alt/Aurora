@@ -21,6 +21,13 @@ String dataAtual();
 void initTemperatura();
 float lerTemperatura();
 void enviarMenu();
+bool isModoNoturnoAgora();
+String faixaModoNoturno();
+void iniciarModoConfigAP();
+void pararModoConfigAP();
+bool apConfigAtivo();
+String nomeAPConfig();
+bool conectarWiFiComCredenciais(const String& ssid, const String& senha, unsigned long timeoutMs = 20000UL);
 
 // ================= OTA =================
 void ativarOTA();          
@@ -29,5 +36,8 @@ bool otaAtivo();
 // ================= VARIÁVEIS =================
 extern temperature_sensor_handle_t temp_handle;
 extern unsigned long lastWiFiAttempt;
+extern bool modoNoturnoHabilitado;
+extern uint8_t modoNoturnoInicioHora;
+extern uint8_t modoNoturnoFimHora;
 
 #endif
