@@ -26,22 +26,23 @@ bool initSD();
 void verificarEstrutura();
 
 // ================= CONTEXTO GEMINI =================
-void salvarContexto(String pergunta, String resposta);
+// Parâmetros por const ref — evita cópias desnecessárias
+void salvarContexto(const String& pergunta, const String& resposta);
 String carregarContexto();
 String carregarPersonalidade();
-String interpretarComando(String text);
+String interpretarComando(const String& text);
 
 // ================= AGENDA =================
 String arquivoAgendaMes();
-void salvarEvento(String data, String evento);
+void salvarEvento(const String& data, const String& evento);
 String lerAgenda();
 void verificarLembretes();
 
 // ================= MEMÓRIA =================
-String buscarMemoria(String pergunta);
-void salvarMemoria(String pergunta, String resposta);
-int contarPergunta(String pergunta);
-void incrementarPergunta(String pergunta);
+String buscarMemoria(const String& pergunta);
+void salvarMemoria(const String& pergunta, const String& resposta);
+int contarPergunta(const String& pergunta);
+void incrementarPergunta(const String& pergunta);
 
 // ================= VARIÁVEIS =================
 extern bool sdOK;

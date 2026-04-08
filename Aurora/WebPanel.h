@@ -1,18 +1,15 @@
 #ifndef WEB_PANEL_H
 #define WEB_PANEL_H
 
-// ════════════════════════════════════════════════════════════
-//  AURORA WEB PANEL — Interface HTML embutida (PROGMEM)
-//  Servida pelo WebServer em WebServer.cpp
-// ════════════════════════════════════════════════════════════
-
 const char AURORA_HTML[] PROGMEM = R"rawhtml(
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AURORA · Painel de Controle</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d1117">
+<title>Aurora</title>
 <style>
   :root {
     --bg:       #0a0c10;
@@ -733,21 +730,28 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
 </head>
 <body>
 
-<!-- ════════════════════ LOGIN ═══════════════════════════ -->
-<div id="loginScreen">
-  <div class="login-card">
-    <div class="login-logo">Sistema</div>
-    <div class="login-title">AURORA</div>
-    <input class="login-input" type="password" id="loginPin" maxlength="6"
-           placeholder="····" autocomplete="off"
-           onkeydown="if(event.key==='Enter') doLogin()">
-    <button class="login-btn" onclick="doLogin()">ENTRAR</button>
-    <div class="login-error" id="loginErr"></div>
-  </div>
+<!-- LOGIN -->
+<div id="ls">
+<div class="lc">
+  <div class="ico">🤖</div>
+  <h1>Aurora</h1>
+  <p>ESP32-S3 · AI Assistant</p>
+  <input type="password" id="lpin" maxlength="8" placeholder="••••" autocomplete="off"
+         onkeydown="if(event.key==='Enter'||event.keyCode===13)doLogin()">
+  <button class="btn btn-p" style="width:100%" onclick="doLogin()">Entrar</button>
+  <div class="eb" id="lerr"></div>
+</div>
 </div>
 
-<!-- ════════════════════ APP ════════════════════════════ -->
+<!-- APP -->
 <div id="app">
+<div class="topbar">
+  <div class="brand">Aurora <span>· ESP32-S3</span></div>
+  <div class="dot" id="cdot"></div>
+  <div class="ttime" id="ttm">--:--</div>
+  <button class="tbtn" id="mlbtn" onclick="toggleLeve()">Leve</button>
+  <button class="tbtn" onclick="doLogout()">Sair</button>
+</div>
 
   <!-- TOPBAR -->
   <div class="topbar">
@@ -778,68 +782,65 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
       </button>
     </div>
 
-    <div class="stat-grid">
-      <div class="stat">
-        <div class="stat-label">Temperatura Chip</div>
-        <div class="stat-value" id="statChipTemp">--<span class="stat-unit">°C</span></div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">Heap Livre</div>
-        <div class="stat-value" id="statHeap">--<span class="stat-unit">%</span></div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">WiFi</div>
-        <div class="stat-value" id="statWifi">--<span class="stat-unit">dBm</span></div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">Uptime</div>
-        <div class="stat-value" id="statUptime" style="font-size:16px">--</div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">Perguntas IA</div>
-        <div class="stat-value" id="statQuestions">--</div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">Clima Ext.</div>
-        <div class="stat-value" id="statClimaTemp">--<span class="stat-unit">°C</span></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Recursos do Sistema</div>
-      <div class="progress-wrap">
-        <div class="progress-label">
-          <span>Heap RAM</span>
-          <span id="heapPct">--%</span>
-        </div>
-        <div class="progress-bar">
-          <div class="progress-fill" id="heapBar" style="width:0%"></div>
-        </div>
-      </div>
-      <div class="progress-wrap" style="margin-top:12px">
-        <div class="progress-label">
-          <span>Sinal WiFi</span>
-          <span id="wifiPct">--%</span>
-        </div>
-        <div class="progress-bar">
-          <div class="progress-fill" id="wifiBar" style="width:0%"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Info do Sistema</div>
-      <div style="font-family:var(--mono);font-size:13px;line-height:2;color:var(--muted)">
-        <div>IP: <span id="infoIP" style="color:var(--accent)">--</span></div>
-        <div>SSID: <span id="infoSSID" style="color:var(--text)">--</span></div>
-        <div>Modelo IA: <span id="infoModelo" style="color:var(--text)">--</span></div>
-        <div>Cidade: <span id="infoCidade" style="color:var(--text)">--</span></div>
-        <div>SD Card: <span id="infoSD" style="color:var(--text)">--</span></div>
-        <div>OTA: <span id="infoOTA" style="color:var(--text)">--</span></div>
-      </div>
-    </div>
-
+<!-- DASHBOARD -->
+<div id="tab-dash" class="tp on">
+  <div class="sh">
+    <div class="st">Visão Geral</div>
+    <button class="btn btn-s btn-sm" onclick="rdash()"><span id="rico">↻</span> Atualizar</button>
   </div>
+  <div class="sg">
+    <div class="sv"><div class="sl">Chip</div><div class="sn" id="schip">--<span class="su">°C</span></div></div>
+    <div class="sv"><div class="sl">Heap</div><div class="sn" id="sheap">--<span class="su">%</span></div></div>
+    <div class="sv"><div class="sl">WiFi</div><div class="sn" id="swifi">--<span class="su">dBm</span></div></div>
+    <div class="sv"><div class="sl">Uptime</div><div class="sn" id="sut" style="font-size:15px">--</div></div>
+    <div class="sv"><div class="sl">IA Pergs.</div><div class="sn" id="sqst">--</div></div>
+    <div class="sv"><div class="sl">Clima</div><div class="sn" id="scli">--<span class="su">°C</span></div></div>
+  </div>
+  <div class="card">
+    <div class="ct">Recursos</div>
+    <div class="pw"><div class="pl"><span>Heap RAM</span><span id="hpct">--%</span></div><div class="pb"><div class="pf" id="hbar" style="width:0"></div></div></div>
+    <div class="pw" style="margin-top:10px"><div class="pl"><span>Sinal WiFi</span><span id="wpct">--%</span></div><div class="pb"><div class="pf" id="wbar" style="width:0"></div></div></div>
+  </div>
+  <div class="card">
+    <div class="ct">Sistema</div>
+    <div class="ig">
+      <div><span class="k">IP: </span><span class="va" id="iip">--</span></div>
+      <div><span class="k">SSID: </span><span class="v" id="issid">--</span></div>
+      <div><span class="k">Modelo IA: </span><span class="v" id="imod">--</span></div>
+      <div><span class="k">Cidade: </span><span class="v" id="icid">--</span></div>
+      <div><span class="k">SD Card: </span><span class="v" id="isd">--</span></div>
+      <div><span class="k">OTA: </span><span class="v" id="iota">--</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- CLIMA -->
+<div id="tab-clima" class="tp">
+  <div class="sh">
+    <div class="st">Clima &amp; Previsão</div>
+    <button class="btn btn-s btn-sm" onclick="atuClima()">↻ Update</button>
+  </div>
+  <div class="card">
+    <div class="ct">Agora em <span id="ccid" style="color:var(--ac)">--</span></div>
+    <div class="sg">
+      <div class="sv"><div class="sl">Temp</div><div class="sn" id="ct_">--<span class="su">°C</span></div></div>
+      <div class="sv"><div class="sl">Sensação</div><div class="sn" id="cs_">--<span class="su">°C</span></div></div>
+      <div class="sv"><div class="sl">Umidade</div><div class="sn" id="ch_">--<span class="su">%</span></div></div>
+      <div class="sv"><div class="sl">Pressão</div><div class="sn" id="cp_" style="font-size:16px">--<span class="su">hPa</span></div></div>
+      <div class="sv"><div class="sl">Vento</div><div class="sn" id="cv_" style="font-size:16px">--<span class="su">km/h</span></div></div>
+      <div class="sv"><div class="sl">Condição</div><div id="cd_" style="font-size:12px;margin-top:6px;color:var(--tx);font-family:var(--mono)">--</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct">Previsão</div>
+    <div class="wg">
+      <div class="wc"><div class="wh" id="ph1">+3h</div><div class="wt" id="pt1">--</div><div class="wr" id="pr1">--%</div></div>
+      <div class="wc"><div class="wh" id="ph2">+6h</div><div class="wt" id="pt2">--</div><div class="wr" id="pr2">--%</div></div>
+      <div class="wc"><div class="wh" id="ph3">+9h</div><div class="wt" id="pt3">--</div><div class="wr" id="pr3">--%</div></div>
+    </div>
+  </div>
+  <div class="ab" id="alerb"><strong>⚠ Alerta ativo</strong><br><span id="alerm"></span></div>
+</div>
 
   <!-- ═══════════════ CLIMA ═══════════════════════════════ -->
   <div id="tab-clima" class="tab-panel fade-in">
@@ -849,54 +850,21 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
       <button class="btn btn-secondary btn-sm" onclick="atualizarClima()">Atualizar clima</button>
     </div>
 
-    <div class="card">
-      <div class="card-title">Agora em <span id="climaCidade" style="color:var(--accent)">--</span></div>
-      <div class="stat-grid">
-        <div class="stat">
-          <div class="stat-label">Temperatura</div>
-          <div class="stat-value" id="cTemp">--<span class="stat-unit">°C</span></div>
-        </div>
-        <div class="stat">
-          <div class="stat-label">Sensação</div>
-          <div class="stat-value" id="cSens">--<span class="stat-unit">°C</span></div>
-        </div>
-        <div class="stat">
-          <div class="stat-label">Umidade</div>
-          <div class="stat-value" id="cHum">--<span class="stat-unit">%</span></div>
-        </div>
-        <div class="stat">
-          <div class="stat-label">Pressão</div>
-          <div class="stat-value" id="cPressao" style="font-size:18px">--<span class="stat-unit">hPa</span></div>
-        </div>
-        <div class="stat">
-          <div class="stat-label">Vento</div>
-          <div class="stat-value" id="cVento" style="font-size:18px">--<span class="stat-unit">km/h</span></div>
-        </div>
-        <div class="stat">
-          <div class="stat-label">Condição</div>
-          <div id="cDesc" style="font-size:13px;margin-top:8px;color:var(--text);font-family:var(--mono)">--</div>
-        </div>
+<!-- CONFIG -->
+<div id="tab-cfg" class="tp">
+  <div class="st" style="margin-bottom:16px">Configurações</div>
+  <div class="card">
+    <div class="ct">Parâmetros</div>
+    <div class="fg">
+      <div><div class="fl">Modelo Gemini</div>
+        <select class="inp" id="cfmod">
+          <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+          <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+          <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+        </select>
       </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Previsão Próximas Horas</div>
-      <div class="weather-grid">
-        <div class="weather-card">
-          <div class="weather-hour" id="ph1">+3h</div>
-          <div class="weather-temp" id="pt1">--°</div>
-          <div class="weather-rain" id="pr1">--%</div>
-        </div>
-        <div class="weather-card">
-          <div class="weather-hour" id="ph2">+6h</div>
-          <div class="weather-temp" id="pt2">--°</div>
-          <div class="weather-rain" id="pr2">--%</div>
-        </div>
-        <div class="weather-card">
-          <div class="weather-hour" id="ph3">+9h</div>
-          <div class="weather-temp" id="pt3">--°</div>
-          <div class="weather-rain" id="pr3">--%</div>
-        </div>
+      <div><div class="fl">Cidade (OpenWeather)</div>
+        <input class="inp" id="cfcid" placeholder="Muriae,BR">
       </div>
     </div>
 
@@ -934,38 +902,32 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
     </div>
 
   </div>
-
-  <!-- ═══════════════ CONFIGURAÇÕES ═══════════════════════ -->
-  <div id="tab-config" class="tab-panel fade-in">
-
-    <div class="section-title" style="margin-bottom:20px">Configurações</div>
-
-    <div class="card">
-      <div class="card-title">Parâmetros Gerais</div>
-      <div class="form-row">
-        <div>
-          <div class="form-label">Modelo Gemini</div>
-          <select class="inp" id="cfgModelo" style="cursor:pointer">
-            <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-            <option value="gemini-1.5-pro">gemini-1.5-pro</option>
-            <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-          </select>
-        </div>
-        <div>
-          <div class="form-label">Cidade (OpenWeather)</div>
-          <input class="inp" id="cfgCidade" placeholder="Muriae,BR">
-        </div>
-      </div>
-      <button class="btn btn-primary" onclick="salvarConfig()">Salvar Configurações</button>
+  <div class="card">
+    <div class="ct">Funções</div>
+    <div class="tr"><div class="ti"><div class="tn">LED NeoPixel</div><div class="td">Indicador de estado</div></div>
+      <label class="tg"><input type="checkbox" id="tled" checked onchange="togFunc('led',this.checked)"><span class="tslider"></span></label></div>
+    <div class="tr"><div class="ti"><div class="tn">OLED Display</div><div class="td">Display físico</div></div>
+      <label class="tg"><input type="checkbox" id="toled" checked onchange="togFunc('oled',this.checked)"><span class="tslider"></span></label></div>
+    <div class="tr"><div class="ti"><div class="tn">Alertas Climáticos</div><div class="td">Notificações Telegram</div></div>
+      <label class="tg"><input type="checkbox" id="taler" checked onchange="togFunc('alertas',this.checked)"><span class="tslider"></span></label></div>
+    <div class="tr"><div class="ti"><div class="tn">Modo Noturno</div><div class="td">Silencia Telegram no horário abaixo</div></div>
+      <label class="tg"><input type="checkbox" id="tnot" checked onchange="togFunc('noturno',this.checked)"><span class="tslider"></span></label></div>
+    <div class="fg" style="margin-top:12px">
+      <div><div class="fl">Início noturno</div><select class="inp" id="cni"></select></div>
+      <div><div class="fl">Fim noturno</div><select class="inp" id="cnf"></select></div>
     </div>
-
-    <div class="card">
-      <div class="card-title">Personalidade da Aurora</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;font-family:var(--mono)">
-        Texto que define o comportamento e personalidade da IA
-      </div>
-      <textarea class="inp" id="cfgPersonalidade" placeholder="Carregando..." style="min-height:160px"></textarea>
-      <button class="btn btn-primary" onclick="salvarPersonalidade()">Salvar Personalidade</button>
+    <div class="br"><button class="btn btn-p" onclick="salvNot()">Salvar Horário Noturno</button></div>
+  </div>
+  <div class="card">
+    <div class="ct">LED por Estado</div>
+    <div id="leds"></div>
+    <div class="br"><button class="btn btn-p" onclick="salvLED()">Salvar Cores</button></div>
+  </div>
+  <div class="card">
+    <div class="ct">Wi-Fi</div>
+    <div class="ig" style="margin-bottom:10px" id="wfst"><span class="k">Carregando...</span></div>
+    <div class="br" style="margin-bottom:10px">
+      <button class="btn btn-s btn-sm" onclick="scanWifi()">Escanear redes</button>
     </div>
 
     <div class="card">
@@ -1054,7 +1016,38 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
       <button class="btn btn-primary" onclick="conectarNovoWiFi()">Conectar neste Wi-Fi</button>
     </div>
 
+    <div class="card">
+      <div class="card-title">LED por Estado (cor + efeito)</div>
+      <div id="ledStatesBox"></div>
+      <button class="btn btn-primary" onclick="salvarCoresLED()">Salvar Cores do LED</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Wi-Fi (AP por duplo clique no botão WEB)</div>
+      <div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:10px" id="wifiStateInfo">Carregando estado de rede...</div>
+      <div class="btn-row" style="margin-bottom:10px">
+        <button class="btn btn-secondary btn-sm" onclick="scanWiFi()">Escanear redes</button>
+      </div>
+      <div class="form-row">
+        <div>
+          <div class="form-label">Rede disponível</div>
+          <select class="inp" id="wifiScanList"><option value="">-- selecione --</option></select>
+        </div>
+        <div>
+          <div class="form-label">Ou SSID manual</div>
+          <input class="inp" id="wifiSsid" placeholder="Nome da rede">
+        </div>
+      </div>
+      <div>
+        <div class="form-label">Senha</div>
+        <input class="inp" id="wifiPass" type="password" placeholder="Senha da rede">
+      </div>
+      <button class="btn btn-primary" onclick="conectarNovoWiFi()">Conectar neste Wi-Fi</button>
+    </div>
+    <div class="fl">Senha</div><input class="inp" id="wpass" type="password" placeholder="Senha">
+    <button class="btn btn-p" onclick="conWifi()">Conectar</button>
   </div>
+</div>
 
   <!-- ═══════════════ CONTROLE ════════════════════════════ -->
   <div id="tab-controle" class="tab-panel fade-in">
@@ -1101,15 +1094,22 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
         <button class="btn btn-secondary btn-sm" onclick="document.getElementById('logBox').innerHTML=''">Limpar</button>
       </div>
     </div>
-
-    <div class="card">
-      <div class="card-title">Relatório Gerado</div>
-      <div id="relatorioBox" class="log-box" style="min-height:60px;white-space:pre-wrap;display:none"></div>
-    </div>
-
   </div>
-  </div><!-- /content -->
+  <div class="card">
+    <div class="ct">Console</div>
+    <div class="lb" id="logb"><span class="ll k">Sistema pronto.</span></div>
+    <div class="br">
+      <button class="btn btn-s btn-sm" onclick="fetchLog()">↻ Atualizar</button>
+      <button class="btn btn-s btn-sm" onclick="document.getElementById('logb').innerHTML=''">Limpar</button>
+    </div>
+  </div>
+  <div class="card" id="relbox" style="display:none">
+    <div class="ct">Relatório</div>
+    <div id="relc" class="lb" style="min-height:50px;white-space:pre-wrap"></div>
+  </div>
+</div>
 
+</div><!-- /wrap -->
 </div><!-- /app -->
 
 <!-- ════════════════ EDITOR MODAL ════════════════════════ -->
@@ -1128,8 +1128,8 @@ const char AURORA_HTML[] PROGMEM = R"rawhtml(
     </div>
   </div>
 </div>
+</div>
 
-<!-- ════════════════ TOAST ════════════════════════════════ -->
 <div id="toast"></div>
 
 <script>
@@ -1207,7 +1207,6 @@ function doLogin(){
     }
   });
 }
-
 function doLogout(){
   request('/api/logout', {method:'POST'}, function(){});
   loggedIn = false;
@@ -1768,5 +1767,4 @@ function escHtml(s){ s=String(s||''); return s.replace(/&/g,'&amp;').replace(/</
 </body>
 </html>
 )rawhtml";
-
-#endif // WEB_PANEL_H
+#endif

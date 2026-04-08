@@ -17,6 +17,22 @@
 #include "GeminiTypes.h" // enum GJobState, struct GeminiJob
 #include "WebPanel.h"
 
+// ── Alocador PSRAM para JsonDocuments grandes ─────────────────
+// Redireciona alocações ≥1KB para PSRAM quando disponível,
+// mantendo o heap interno livre para WiFi, TLS e tarefas FreeRTOS.
+struct SpiRamAllocator {
+    void* allocate(size_t n) {
+        return (ESP.getFreePsram() > n)
+            ? heap_caps_malloc(n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)
+            : malloc(n);
+    }
+    void deallocate(void* p) { free(p); }
+    void* reallocate(void* p, size_t n) {
+        return heap_caps_realloc(p, n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    }
+};
+using PsramDoc = BasicJsonDocument<SpiRamAllocator>;
+
 // ════════════════════════════════════════════════════════════
 //  VARIÁVEIS
 // ════════════════════════════════════════════════════════════
@@ -61,7 +77,7 @@ static void sendJSON(const String& json, int code=200){
 }
 
 // Lê corpo JSON da request
-static bool parseBody(DynamicJsonDocument& doc){
+static bool parseBody(JsonDocument& doc){
   if(!server.hasArg("plain")) return false;
   return !deserializeJson(doc, server.arg("plain"));
 }
@@ -166,7 +182,7 @@ static void handleSDList(){
   // Segurança: limita ao diretório /aurora
   if(!path.startsWith("/aurora") && path != "/") path = "/aurora";
 
-  DynamicJsonDocument doc(4096);
+  PsramDoc doc(4096);
   JsonArray dirs  = doc.createNestedArray("dirs");
   JsonArray files = doc.createNestedArray("files");
 
@@ -226,7 +242,7 @@ static void handleSDRead(){
   bool truncated = f.available();
   f.close();
 
-  DynamicJsonDocument doc(10240);
+  PsramDoc doc(10240);
   doc["content"]   = content;
   doc["truncated"] = truncated;
   doc["size"]      = (int)read;
@@ -238,7 +254,7 @@ static void handleSDWrite(){
   if(!checkAuth()) return;
   if(!sdOK){ sendJSON("{\"err\":\"sd_not_available\"}"); return; }
 
-  DynamicJsonDocument doc(10240);
+  PsramDoc doc(10240);
   if(!parseBody(doc)){ sendJSON("{\"ok\":false,\"err\":\"bad_json\"}"); return; }
 
   String path    = doc["path"] | "";
@@ -281,7 +297,7 @@ static void handleSDDelete(){
 // ════════════════════════════════════════════════════════════
 static void handleConfigGet(){
   if(!checkAuth()) return;
-  DynamicJsonDocument doc(2048);
+  PsramDoc doc(2048);
   doc["modelo"]              = modeloAtivo;
   doc["cidade"]              = cidade;
   doc["personalidade"]       = carregarPersonalidade();
@@ -447,7 +463,7 @@ static void handleToggle(){
 static void handleCmdReset(){
   if(!checkAuth()) return;
   sendJSON("{\"ok\":true}");
-  delay(300);
+  // sem delay — resposta já enviada antes do restart
   ESP.restart();
 }
 
@@ -464,7 +480,7 @@ static void handleCmdOTA(){
 static void handleCmdRelatorio(){
   if(!checkAuth()) return;
   String rel = gerarRelatorio();
-  DynamicJsonDocument doc(6144);
+  PsramDoc doc(6144);
   doc["relatorio"] = rel;
   String out; serializeJson(doc, out);
   sendJSON(out);
